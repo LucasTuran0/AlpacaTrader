@@ -1,0 +1,15 @@
+yfinance
+fastapi
+uvicorn
+python-dotenv
+alpaca-py
+pandas
+numpy
+pydantic
+sqlalchemy
+mcp
+fastmcp
+langgraph
+langchain
+langchain-community
+langchain-google-genai

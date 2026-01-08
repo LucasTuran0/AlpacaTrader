@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/alpaca_trader.db
+backend/alpaca_trader_v2.db
+backend/database.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+secrets.json
+TempGitIgnore.txt
