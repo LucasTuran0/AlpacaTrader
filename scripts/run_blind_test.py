@@ -12,7 +12,7 @@ def run_blind_test():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("BlindTest")
     
-    logger.info("🕵️ Starting Blind Out-of-Sample Validation 🕵️")
+    logger.info(" Starting Blind Out-of-Sample Validation ")
     logger.info("Objective: Verify 'Turbo-Scalp' performance on recent data WITHOUT learning.")
 
     # 1. PURGE PREVIOUS RESULTS FOR CLEAN ANALYSIS
@@ -39,7 +39,7 @@ def run_blind_test():
         timeframe="1m"
     )
 
-    logger.info("\n🏆 Blind Test Complete!")
+    logger.info("\n Blind Test Complete!")
     logger.info("Check the Frontend Dashboard or 'Daily Equity' history for the OOS performance curve.")
 
 if __name__ == "__main__":

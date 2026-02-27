@@ -17,7 +17,7 @@ def run_scalp_training():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("ScalpTraining")
     
-    logger.info("⚡ Starting High-Velocity Scalp Calibration ⚡")
+    logger.info(" Starting High-Velocity Scalp Calibration ")
     logger.info("Objective: Optimize for 0.1% Threshold triggers using 1-hour bar granularity.")
 
     # 1. FETCH 1-HOUR DATA (Last 2 years)
@@ -56,7 +56,7 @@ def run_scalp_training():
     logger.info("Waiting for AI Advisor for Final Calibration...")
     subprocess.run(["python", "run_advisor.py"])
 
-    logger.info("\n🏆 Scalp Calibration Complete! High-Velocity parameters are now live.")
+    logger.info("\n Scalp Calibration Complete! High-Velocity parameters are now live.")
 
 if __name__ == "__main__":
     run_scalp_training()

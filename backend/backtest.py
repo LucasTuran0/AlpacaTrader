@@ -110,7 +110,7 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
             is_crash = False
             if kwargs.get('stress_test') and (i - sim_start_index) > 10 and (i % 200 == 0):
                 is_crash = True
-                logger.warning(f"💥 FLASH CRASH SIMULATED at {current_date} 💥")
+                logger.warning(f" FLASH CRASH SIMULATED at {current_date} ")
             
             # A. Bandit Choose
             if is_training:
@@ -212,9 +212,9 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
             
             analysis_text = f"Strategy: TS_MOM | Params: {params_used['fast']}/{params_used['slow']} | VolTarget: {params_used['vol_target']} | Rational: " + "; ".join(reasons)
             if stop_triggered:
-                analysis_text += " | ⚠️ STOP LOSS TRIGGERED"
+                analysis_text += " |  STOP LOSS TRIGGERED"
             if tp_triggered:
-                analysis_text += " | 🎯 TAKE PROFIT TRIGGERED"
+                analysis_text += " |  TAKE PROFIT TRIGGERED"
 
             decision = Decision(
                 run_id=run_id,
@@ -236,15 +236,15 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
             
             if (i - sim_start_index) % 10 == 0:
                 year_indicator = current_date.year
-                logger.info(f"📊 [{year_indicator}] Progress: {current_date.date()} | Equity: ${equity:,.0f} | Last PnL: ${daily_pnl:,.2f}")
+                logger.info(f" [{year_indicator}] Progress: {current_date.date()} | Equity: ${equity:,.0f} | Last PnL: ${daily_pnl:,.2f}")
                 # Commit every 10 steps so the Dashboard shows live progress!
                 db.commit()
                 
         db.commit()
-        logger.info("✅ Deep Training Complete. 5 years of history processed.")
+        logger.info(" Deep Training Complete. 5 years of history processed.")
         
     except Exception as e:
-        logger.error(f"❌ Backtest Failed: {e}")
+        logger.error(f" Backtest Failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
     finally:

@@ -34,6 +34,8 @@ class SentinelShield:
             headlines = []
             for symbol in symbols:
                 news = self.provider.get_news([symbol], limit=5)
+                if news is None:
+                    continue
                 for item in news:
                     headline = item.get("headline") if isinstance(item, dict) else getattr(item, "headline", "")
                     if headline:

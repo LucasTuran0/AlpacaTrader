@@ -13,9 +13,9 @@ def test_rest_auth():
     try:
         client = TradingClient(api_key, secret_key, paper=paper)
         acct = client.get_account()
-        print(f"✅ REST Auth SUCCESS! Account Status: {acct.status}")
+        print(f" REST Auth SUCCESS! Account Status: {acct.status}")
     except Exception as e:
-        print(f"❌ REST Auth FAILED: {e}")
+        print(f" REST Auth FAILED: {e}")
 
 if __name__ == "__main__":
     test_rest_auth()

@@ -29,14 +29,14 @@ from datetime import datetime
 def print_header():
     """Print installation header."""
     print("=" * 60)
-    print("🚀 Alpaca MCP Server Installation Script")
+    print(" Alpaca MCP Server Installation Script")
     print("=" * 60)
     print()
 
 
 def print_step(step_num: int, description: str):
     """Print a step in the installation process."""
-    print(f"📋 Step {step_num}: {description}")
+    print(f" Step {step_num}: {description}")
     print("-" * 40)
 
 
@@ -55,12 +55,12 @@ def run_command(cmd: list, description: str, cwd: Optional[str] = None) -> bool:
             print(f"   Output: {result.stdout.strip()}")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"   ❌ Error: {description} failed")
+        print(f"    Error: {description} failed")
         print(f"   Command: {' '.join(cmd)}")
         print(f"   Error output: {e.stderr}")
         return False
     except FileNotFoundError:
-        print(f"   ❌ Error: Command not found: {cmd[0]}")
+        print(f"    Error: Command not found: {cmd[0]}")
         return False
 
 
@@ -159,11 +159,11 @@ def ensure_uv_installed() -> str:
 
     uv_path = is_uv_installed()
     if uv_path:
-        print(f"   ✅ Found uv: {uv_path}")
+        print(f"    Found uv: {uv_path}")
         print()
         return uv_path
 
-    print("   ❌ uv not found on PATH.")
+    print("    uv not found on PATH.")
     print(f"   uv is recommended to install Python 3.10+ and project dependencies. See {UV_INSTALL_DOC_URL}")
     print("   Installation methods available:")
     print("   • curl, wget, brew (macOS/Linux)")
@@ -176,7 +176,7 @@ def ensure_uv_installed() -> str:
     while True:
         choice = input("   Install uv now? Choose method [curl/wget/brew/pipx/winget/scoop] or type 'skip' to cancel: ").strip().lower()
         if choice == "skip":
-            print("   ❌ uv installation skipped. Cannot continue without uv.")
+            print("    uv installation skipped. Cannot continue without uv.")
             sys.exit(1)
         if choice not in install_methods:
             print("   Invalid choice. Please enter 'curl', 'wget', 'brew', 'pipx', 'winget', 'scoop', or 'skip'.")
@@ -184,16 +184,16 @@ def ensure_uv_installed() -> str:
 
         success = install_uv(choice)
         if not success:
-            print("   ❌ uv installation failed. Please try another method.")
+            print("    uv installation failed. Please try another method.")
             continue
 
         uv_path = is_uv_installed()
         if uv_path:
-            print(f"   ✅ uv installed successfully: {uv_path}")
+            print(f"    uv installed successfully: {uv_path}")
             print()
             return uv_path
 
-        print("   ❌ uv still not found on PATH after installation. Please ensure it is installed and try again.")
+        print("    uv still not found on PATH after installation. Please ensure it is installed and try again.")
 
 
 
@@ -202,7 +202,7 @@ def check_prerequisites() -> str:
     """Ensure uv is available for virtual environment installation."""
     print_step(1, "Checking Prerequisites")
     uv_path = ensure_uv_installed()
-    print("   ✅ Prerequisites check completed")
+    print("    Prerequisites check completed")
     print()
     return uv_path
 
@@ -221,10 +221,10 @@ def create_virtual_environment(uv_path: str, project_dir: Path) -> Path:
 
     create_cmd = [uv_path, "venv", "--python", "3.10", ".venv"]
     if not run_command(create_cmd, "Create virtual environment with uv", cwd=str(project_dir)):
-        print("   ❌ Failed to create virtual environment")
+        print("    Failed to create virtual environment")
         sys.exit(1)
 
-    print(f"   ✅ Virtual environment created at {venv_path}")
+    print(f"    Virtual environment created at {venv_path}")
     print()
     return venv_path
 
@@ -245,7 +245,7 @@ def install_dependencies(uv_path: str, venv_path: Path, project_dir: Path):
     requirements_file = project_dir / "requirements.txt"
 
     if not requirements_file.exists():
-        print(f"   ❌ Error: requirements.txt not found at {requirements_file}")
+        print(f"    Error: requirements.txt not found at {requirements_file}")
         sys.exit(1)
 
     # Use uv pip install as specified in README.md manual steps
@@ -259,7 +259,7 @@ def install_dependencies(uv_path: str, venv_path: Path, project_dir: Path):
     ]
 
     if not run_command(install_cmd, "Install requirements with uv pip", cwd=str(project_dir)):
-        print("   ❌ Failed to install dependencies")
+        print("    Failed to install dependencies")
         sys.exit(1)
 
     # Install the package itself in editable mode
@@ -273,10 +273,10 @@ def install_dependencies(uv_path: str, venv_path: Path, project_dir: Path):
     ]
     
     if not run_command(package_install_cmd, "Install alpaca-mcp-server package", cwd=str(project_dir)):
-        print("   ❌ Failed to install alpaca-mcp-server package")
+        print("    Failed to install alpaca-mcp-server package")
         sys.exit(1)
 
-    print("   ✅ Dependencies and package installed successfully")
+    print("    Dependencies and package installed successfully")
     print()
 
 
@@ -304,7 +304,7 @@ def prompt_for_client() -> str:
         
         if choice in available_clients:
             print()
-            print(f"   ✅ Selected: {available_clients[choice]}")
+            print(f"    Selected: {available_clients[choice]}")
             print()
             return choice
         else:
@@ -336,7 +336,7 @@ def prompt_for_api_keys() -> Dict[str, str]:
             break
         elif paper_trade in ['n', 'no']:
             paper_trade_value = "False"
-            print("   ⚠️  WARNING: Live trading mode selected - this will use real money!")
+            print("     WARNING: Live trading mode selected - this will use real money!")
             confirm = input("   Are you sure? [y/N]: ").strip().lower()
             if confirm in ['y', 'yes']:
                 break
@@ -382,12 +382,12 @@ STREAM_DATA_WSS = {api_config['STREAM_DATA_WSS']}
     try:
         with open(env_file, 'w') as f:
             f.write(env_content)
-        print(f"   ✅ Environment file created at {env_file}")
+        print(f"    Environment file created at {env_file}")
         
         if not api_config['ALPACA_API_KEY'] or not api_config['ALPACA_SECRET_KEY']:
-            print(f"   ⚠️  Note: API keys are empty. Please edit {env_file} to add your credentials.")
+            print(f"     Note: API keys are empty. Please edit {env_file} to add your credentials.")
     except Exception as e:
-        print(f"   ❌ Error creating .env file: {e}")
+        print(f"    Error creating .env file: {e}")
         sys.exit(1)
     
     print()
@@ -456,10 +456,10 @@ def backup_config_file(config_path: Path, client_name: str) -> Optional[Path]:
     
     try:
         shutil.copy2(config_path, backup_path)
-        print(f"   📄 Backup created: {backup_path}")
+        print(f"    Backup created: {backup_path}")
         return backup_path
     except Exception as e:
-        print(f"   ⚠️  Warning: Could not create backup: {e}")
+        print(f"     Warning: Could not create backup: {e}")
         return None
 
 
@@ -481,11 +481,11 @@ def load_mcp_config(config_path: Path, client_name: str) -> Dict[str, Any]:
             
         return config
     except json.JSONDecodeError as e:
-        print(f"   ⚠️  Warning: Invalid JSON in {client_name} config: {e}")
+        print(f"     Warning: Invalid JSON in {client_name} config: {e}")
         print(f"   Creating new configuration...")
         return {"mcpServers": {}}
     except Exception as e:
-        print(f"   ⚠️  Warning: Could not read {client_name} config: {e}")
+        print(f"     Warning: Could not read {client_name} config: {e}")
         return {"mcpServers": {}}
 
 
@@ -516,11 +516,11 @@ def update_mcp_config(config_path: Path, alpaca_config: Dict[str, Any], api_conf
         with open(config_path, 'w') as f:
             json.dump(existing_config, f, indent=2)
         
-        print(f"   ✅ {client_name.title()} config updated: {config_path}")
+        print(f"    {client_name.title()} config updated: {config_path}")
         return True
         
     except Exception as e:
-        print(f"   ❌ Error updating {client_name} config: {e}")
+        print(f"    Error updating {client_name} config: {e}")
         return False
 
 
@@ -528,38 +528,38 @@ def update_client_configuration(selected_client: str, mcp_config: Dict[str, Any]
     """Update MCP client configuration automatically."""
     print_step(7, f"Updating {selected_client.title()} Configuration")
     
-    print(f"   🔧 Configuring {selected_client.title()}...")
+    print(f"    Configuring {selected_client.title()}...")
     
     if selected_client == "claude":
         config_path = get_claude_config_path()
     elif selected_client == "cursor":
         config_path = get_cursor_config_path()
     else:
-        print(f"   ❌ Unknown client: {selected_client}")
+        print(f"    Unknown client: {selected_client}")
         return False
     
     if not config_path:
-        print(f"   ⚠️  Could not determine {selected_client} config path for this platform")
+        print(f"     Could not determine {selected_client} config path for this platform")
         return False
     
-    print(f"   📁 {selected_client.title()} config location: {config_path}")
+    print(f"    {selected_client.title()} config location: {config_path}")
     
     # Update automatically if API keys are provided
     if api_config['ALPACA_API_KEY'] and api_config['ALPACA_SECRET_KEY']:
         success = update_mcp_config(config_path, mcp_config, api_config, selected_client)
         if success:
-            print(f"   🎉 {selected_client.title()} configuration updated successfully!")
+            print(f"    {selected_client.title()} configuration updated successfully!")
             if selected_client == "claude":
-                print("   📌 Next: Restart Claude Desktop to load the new configuration")
+                print("    Next: Restart Claude Desktop to load the new configuration")
             elif selected_client == "cursor":
-                print("   📌 Next: Restart Cursor IDE to load the new configuration")
+                print("    Next: Restart Cursor IDE to load the new configuration")
         else:
-            print(f"   ⚠️  {selected_client.title()} manual configuration may be required")
+            print(f"     {selected_client.title()} manual configuration may be required")
         print()
         return success
     else:
-        print(f"   ⏭️  Skipping {selected_client} automatic update (API keys not provided)")
-        print("   💡 You can run the installer again with API keys to auto-configure")
+        print(f"     Skipping {selected_client} automatic update (API keys not provided)")
+        print("    You can run the installer again with API keys to auto-configure")
         print()
         return False
 
@@ -572,34 +572,34 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
     env_file = project_dir / ".env"
     client_name = selected_client.title()
     
-    print("   🎉 Alpaca MCP Server installation completed successfully!")
+    print("    Alpaca MCP Server installation completed successfully!")
     print()
     
     if config_success:
-        print(f"   ✅ {client_name} automatically configured!")
+        print(f"    {client_name} automatically configured!")
         print()
         
-        print("   📋 Final Steps:")
+        print("    Final Steps:")
         print()
         
         # Step 1: Restart client
         if selected_client == "claude":
-            print("   1️⃣  Restart Claude Desktop")
+            print("     Restart Claude Desktop")
             print("      Close and reopen Claude Desktop to load the new configuration")
         elif selected_client == "cursor":
-            print("   1️⃣  Restart Cursor IDE")
+            print("     Restart Cursor IDE")
             print("      Close and reopen Cursor to load the new configuration")
         print()
         
         # Step 2: Test the integration
-        print("   2️⃣  Test the integration:")
+        print("     Test the integration:")
         print(f"      Try asking in {client_name}:")
         print('      "What is my Alpaca account balance?"')
         print('      "Show me my current positions"')
         print()
         
         # Step 3: Optional testing
-        print("   3️⃣  Optional - Test the server manually:")
+        print("     Optional - Test the server manually:")
         print(f"      cd {project_dir}")
         if platform.system() == "Windows":
             print(f"      {venv_path}\\Scripts\\activate")
@@ -610,11 +610,11 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
         print()
         
     else:
-        print(f"   📋 Manual Configuration Required for {client_name}:")
+        print(f"    Manual Configuration Required for {client_name}:")
         print()
         
         # Step 1: API keys (if needed)
-        print("   1️⃣  Configure API keys (if not done already):")
+        print("     Configure API keys (if not done already):")
         print(f"      Edit {env_file}")
         print("      Add your Alpaca API keys")
         print()
@@ -622,7 +622,7 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
         # Step 2: Client-specific instructions
         if selected_client == "claude":
             claude_config_path = get_claude_config_path()
-            print("   2️⃣  Configure Claude Desktop:")
+            print("     Configure Claude Desktop:")
             print("      Open Claude Desktop → Settings → Developer → Edit Config")
             if claude_config_path:
                 print(f"      This should open: {claude_config_path}")
@@ -634,7 +634,7 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
             
         elif selected_client == "cursor":
             cursor_config_path = get_cursor_config_path()
-            print("   2️⃣  Configure Cursor IDE:")
+            print("     Configure Cursor IDE:")
             if cursor_config_path:
                 print(f"      Create or edit: {cursor_config_path}")
             print("      Add this configuration and update the API keys:")
@@ -644,12 +644,12 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
             print()
         
         # Step 3: Restart
-        print(f"   3️⃣  Restart {client_name}")
+        print(f"     Restart {client_name}")
         print(f"      Close and reopen {client_name} to load the new configuration")
         print()
     
     # Additional info (always shown)
-    print("   💡 Additional Information:")
+    print("    Additional Information:")
     print("      - The server uses paper trading by default (safe for testing)")
     print("      - To enable live trading, set ALPACA_PAPER_TRADE = False in .env")
     print("      - Dependencies installed in virtual environment (.venv)")
@@ -661,7 +661,7 @@ def print_instructions(project_dir: Path, venv_path: Path, config: Dict[str, Any
     print()
     
     # Final message
-    print(f"   ✅ Installation complete! Enjoy trading with {client_name}! 🚀")
+    print(f"    Installation complete! Enjoy trading with {client_name}! ")
 
 
 def main():
@@ -702,10 +702,10 @@ def main():
         print_instructions(project_dir, venv_path, mcp_config, selected_client, config_success)
         
     except KeyboardInterrupt:
-        print("\n\n❌ Installation cancelled by user")
+        print("\n\n Installation cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Unexpected error: {e}")
+        print(f"\n\n Unexpected error: {e}")
         sys.exit(1)
 
 

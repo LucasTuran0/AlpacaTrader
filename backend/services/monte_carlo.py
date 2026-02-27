@@ -26,7 +26,7 @@ def run_monte_carlo(iterations=1000):
         daily_rewards = [d.reward for d in decisions if d.reward is not None]
         initial_equity = 100000.0
         
-        print(f"📊 Analyzing {len(daily_rewards)} days of returns across {iterations} universes...")
+        print(f" Analyzing {len(daily_rewards)} days of returns across {iterations} universes...")
 
         final_equities = []
         ruined_count = 0
@@ -60,11 +60,11 @@ def run_monte_carlo(iterations=1000):
         print("----------------------------------------\n")
 
         if win_rate_universes > 80:
-            print("🟢 ROBUST: The strategy succeeds in most parallel universes.")
+            print(" ROBUST: The strategy succeeds in most parallel universes.")
         elif win_rate_universes > 50:
-            print("🟡 CAUTION: Performance is highly dependent on return sequencing.")
+            print(" CAUTION: Performance is highly dependent on return sequencing.")
         else:
-            print("🔴 OVERFITTED: Strategy fails in the majority of random timelines.")
+            print(" OVERFITTED: Strategy fails in the majority of random timelines.")
 
     finally:
         db.close()

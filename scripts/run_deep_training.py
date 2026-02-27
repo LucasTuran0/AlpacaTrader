@@ -15,7 +15,7 @@ def run_deep_training_session():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("DeepTraining")
     
-    logger.info("🔥 Starting 1-Hour Genetic Intelligence Sweep 🔥")
+    logger.info(" Starting 1-Hour Genetic Intelligence Sweep ")
     
     # 1. GENERATION 1: WIDE GRID DISCOVERY
     logger.info("\n--- EPOCH 1: Wide Grid Discovery ---")
@@ -56,7 +56,7 @@ def run_deep_training_session():
     # Low epsilon for exploitation
     run_backtest(days_to_sim=1260, reset_bandit=False, is_training=True)
     
-    logger.info("\n🏆 Deep Training Complete! The Master Model is now locked.")
+    logger.info("\n Deep Training Complete! The Master Model is now locked.")
     logger.info("Run 'python run_stress_test.py' to see the final robustness score.")
 
 if __name__ == "__main__":

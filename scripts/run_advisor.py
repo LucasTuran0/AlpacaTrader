@@ -10,14 +10,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Advisor")
 
 def main():
-    logger.info("🕵️ Starting AI Strategy Retrospective...")
+    logger.info(" Starting AI Strategy Retrospective...")
     db = SessionLocal()
     try:
         advisor = StrategyAdvisor(db)
         result = advisor.perform_retrospective()
         logger.info("--- Retrospective Results ---")
         print(result)
-        logger.info("✅ Optimization complete. Bandit weights updated via AI Feedback.")
+        logger.info(" Optimization complete. Bandit weights updated via AI Feedback.")
     except Exception as e:
         logger.error(f"Advisor Failed: {e}")
     finally:

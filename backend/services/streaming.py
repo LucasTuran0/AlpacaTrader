@@ -52,18 +52,18 @@ class AlpacaStreamingService:
             if (now - self.global_last_trigger) < self.min_cooldown_sec:
                 return
 
-            logger.info(f"⚡ PREY DETECTED: {symbol} at {price} (Move: {move_pct:.4%})")
+            logger.info(f" PREY DETECTED: {symbol} at {price} (Move: {move_pct:.4%})")
             self.last_prices[symbol] = price
             self.last_trigger_times[symbol] = now
             self.global_last_trigger = now
             await self.data_callback()
 
     async def _on_trade_update(self, data):
-        logger.info(f"🔔 TRADE UPDATE: {data.event} for {data.order.symbol}")
+        logger.info(f" TRADE UPDATE: {data.event} for {data.order.symbol}")
         await self.trade_callback(data)
 
     async def start(self):
-        logger.info(f"🚀 Engaging Quantum-Trigger + Live Learning...")
+        logger.info(f" Engaging Quantum-Trigger + Live Learning...")
         
         # 1. Start Quote/Trade Stream
         self.data_stream.subscribe_trades(self._on_data, *self.symbols)
@@ -73,7 +73,7 @@ class AlpacaStreamingService:
         self.trade_stream.subscribe_trade_updates(self._on_trade_update)
         await self.trade_stream._run_forever()
 
-    def stop(self):
-        logger.info("🛑 Stopping Streams...")
-        asyncio.create_task(self.data_stream.stop_streaming())
-        asyncio.create_task(self.trade_stream.stop_streaming())
+    async def stop(self):
+        logger.info(" Stopping Streams...")
+        await self.data_stream.stop()
+        await self.trade_stream.stop()

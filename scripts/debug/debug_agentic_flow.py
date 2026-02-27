@@ -13,7 +13,7 @@ mock_context = {
 
 async def debug_agent():
     load_dotenv("backend/.env")
-    print("🤖 Starting Agentic Flow Debug Test...")
+    print(" Starting Agentic Flow Debug Test...")
     
     executor = AgenticExecutor()
     result = await executor.run(mock_context)

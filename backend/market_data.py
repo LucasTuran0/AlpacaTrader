@@ -52,4 +52,13 @@ class MarketDataProvider:
             limit=limit
         )
         news = self.news_client.get_news(request_params)
-        return news.data
+    def get_latest_trades(self, symbols: list[str]) -> dict:
+        """
+        Fetches the very latest trade for the given symbols.
+        Returns a dict {symbol: TradeObject}.
+        """
+        from alpaca.data.requests import StockLatestTradeRequest
+        
+        req = StockLatestTradeRequest(symbol_or_symbols=symbols)
+        trades = self.client.get_stock_latest_trade(req)
+        return trades

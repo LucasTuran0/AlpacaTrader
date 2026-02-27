@@ -11,7 +11,7 @@ def run_stress_gauntlet():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("Gauntlet")
     
-    logger.info("⚔️  Launching The Gauntlet: Deep Stress & Walk-Forward ⚔️")
+    logger.info("  Launching The Gauntlet: Deep Stress & Walk-Forward ")
 
     # STAGE 1: INTRADAY FLASH CRASH RESILIENCE
     # We run 30 days of 1-minute data with 'stress_test=True'
@@ -29,13 +29,13 @@ def run_stress_gauntlet():
     # We cycle: Train on Week 1, Test on Week 2. Preserving the brain throughout.
     logger.info("\n--- STAGE 2: 4-Stage Walk-Forward Evolution ---")
     for stage in range(1, 5):
-        logger.info(f"\n🚀 GAUNTLET STAGE {stage} Training...")
+        logger.info(f"\n GAUNTLET STAGE {stage} Training...")
         run_backtest(days_to_sim=7, reset_bandit=False, is_training=True, timeframe="1m")
         
-        logger.info(f"🧪 GAUNTLET STAGE {stage} Validation (Blind)...")
+        logger.info(f" GAUNTLET STAGE {stage} Validation (Blind)...")
         run_backtest(days_to_sim=3, reset_bandit=False, is_training=False, timeframe="1m")
 
-    logger.info("\n🏆 GAUNTLET COMPLETE. If Equity >= $100k, the bot is UNSTOPPABLE. 🏆")
+    logger.info("\n GAUNTLET COMPLETE. If Equity >= $100k, the bot is UNSTOPPABLE. ")
 
 if __name__ == "__main__":
     run_stress_gauntlet()

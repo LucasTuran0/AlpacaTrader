@@ -9,7 +9,7 @@ from datetime import datetime
 def analyze_results():
     db = SessionLocal()
     
-    # 🕵️ FETCH ALL DATA
+    #  FETCH ALL DATA
     # Since we purge before running, we can take everything or just the latest window.
     equity_all = db.query(DailyEquity).order_by(DailyEquity.date.asc()).all()
     
@@ -36,7 +36,7 @@ def analyze_results():
     wins = [d for d in decisions if d.reward > 0]
     win_rate = (len(wins) / len(decisions)) * 100 if decisions else 0
 
-    print(f"\n--- 🕵️ Final Blind Out-of-Sample Analysis 🕵️ ---")
+    print(f"\n---  Final Blind Out-of-Sample Analysis  ---")
     print(f"Window: {df.iloc[0]['date']} to {df.iloc[-1]['date']}")
     print(f"Initial Equity: ${start_equity:,.2f}")
     print(f"Final Equity:   ${end_equity:,.2f}")
@@ -52,11 +52,11 @@ def analyze_results():
         print(f"Avg Daily Return: {avg_daily_return:.2f}%")
 
     if max_drawdown < -10:
-        print("\n⚠️ WARNING: Significant Drawdown detected.")
+        print("\n WARNING: Significant Drawdown detected.")
     elif max_drawdown < -5:
-        print("\n💡 NOTE: Moderate Drawdown, typical for scalping.")
+        print("\n NOTE: Moderate Drawdown, typical for scalping.")
     else:
-        print("\n✅ EXCELLENT: Low drawdown profile.")
+        print("\n EXCELLENT: Low drawdown profile.")
 
     db.close()
 

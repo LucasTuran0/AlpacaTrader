@@ -8,10 +8,10 @@ class EpsilonGreedyBandit:
         self.epsilon = epsilon
         # Default arms as a fallback
         self.arms = [
-            {"fast": 5, "slow": 15, "vol_target": 0.4},
-            {"fast": 10, "slow": 30, "vol_target": 0.3},
-            {"fast": 20, "slow": 60, "vol_target": 0.15},
-            {"fast": 50, "slow": 100, "vol_target": 0.1},
+            {"fast": 15, "slow": 40, "vol_target": 0.5},   # Very Fast (Scalping 15m/40m)
+            {"fast": 30, "slow": 70, "vol_target": 0.4},  # Fast (Intraday 30m/70m)
+            {"fast": 50, "slow": 150, "vol_target": 0.3}, # Medium (Active 50m/150m)
+            {"fast": 100, "slow": 300, "vol_target": 0.15}, # Slow (Swing 100m/300m)
         ]
         self._load_arms_from_db()
 

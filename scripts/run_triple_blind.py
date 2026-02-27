@@ -17,17 +17,17 @@ def run_triple_blind_test():
     today = datetime.now()
     ninety_days_ago = today - timedelta(days=90)
 
-    logger.info("🛡️ PHASE 1: Training on the Past (2022 -> 3 months ago)")
+    logger.info(" PHASE 1: Training on the Past (2022 -> 3 months ago)")
     run_backtest(days_to_sim=1000, end_date=ninety_days_ago, reset_bandit=True, is_training=True)
 
-    logger.info("\n🛡️ PHASE 2: TRIPLE-BLIND TEST (The Last 90 Days)")
+    logger.info("\n PHASE 2: TRIPLE-BLIND TEST (The Last 90 Days)")
     logger.info("This data has zero 'Bull Market' bias. It's the most recent, messy reality.")
     
     # reset_bandit=False (Keep the brain)
     # is_training=False (Locked mode)
     run_backtest(days_to_sim=90, end_date=today, reset_bandit=False, is_training=False)
 
-    logger.info("\n✅ Triple-Blind Validation Complete.")
+    logger.info("\n Triple-Blind Validation Complete.")
     logger.info("If the last 90 days are profitable, the bot is NOT overfitted to the long-term bull market.")
 
 if __name__ == "__main__":

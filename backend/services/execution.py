@@ -4,7 +4,8 @@ from math import floor
 def calculate_orders(
     current_positions: List[Dict[str, Any]], 
     target_values: Dict[str, float], 
-    current_prices: Dict[str, float]
+    current_prices: Dict[str, float],
+    only_allow_symbols: list[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Generates orders to move from current positions to target values.
@@ -13,6 +14,7 @@ def calculate_orders(
         current_positions: List of dicts (alpaca position objects or dicts).
         target_values: Dict {symbol: target_market_value_usd}.
         current_prices: Dict {symbol: current_price_usd}.
+        only_allow_symbols: Optional whitelist. If provided, ignores symbols not in this list.
         
     Returns:
         List of order dicts.
@@ -24,6 +26,11 @@ def calculate_orders(
     
     # Union of all symbols
     all_symbols = set(current_qtys.keys()) | set(target_values.keys())
+    
+    # Filter to whitelist if provided
+    if only_allow_symbols is not None:
+        allowed_set = set(only_allow_symbols)
+        all_symbols = [s for s in all_symbols if s in allowed_set]
     
     for symbol in all_symbols:
         target_val = target_values.get(symbol, 0.0)
