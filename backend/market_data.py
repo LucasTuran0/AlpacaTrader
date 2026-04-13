@@ -44,14 +44,13 @@ class MarketDataProvider:
         """
         Fetches recent news headlines for the given symbols.
         """
-        # Some versions of alpaca-py expect a comma-separated string or handle lists differently
-        # Let's try combining them if it's a list
-        syms = ",".join(symbols) if isinstance(symbols, list) else symbols
         request_params = NewsRequest(
-            symbols=syms,
+            symbols=symbols,
             limit=limit
         )
         news = self.news_client.get_news(request_params)
+        return news
+
     def get_latest_trades(self, symbols: list[str]) -> dict:
         """
         Fetches the very latest trade for the given symbols.

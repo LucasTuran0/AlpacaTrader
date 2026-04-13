@@ -41,10 +41,10 @@ def size_position(
     
     # Regime Shield: If VIX > 25, we are in a high-fear regime. Cut aggression.
     risk_multiplier = 1.0
-    if vix_value > 25:
-        risk_multiplier = 0.5 # Defensive shift
-    elif vix_value > 35:
+    if vix_value > 35:
         risk_multiplier = 0.1 # Panic shift (move almost everything to cash)
+    elif vix_value > 25:
+        risk_multiplier = 0.5 # Defensive shift
 
     # First pass: Calculate raw unconstrained weights
     raw_weights = {}

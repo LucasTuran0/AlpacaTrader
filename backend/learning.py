@@ -20,12 +20,15 @@ class EpsilonGreedyBandit:
         states = self.db.query(BanditState).all()
         for s in states:
             try:
-                # Key format: "fast_slow_vol"
                 parts = s.param_key.split("_")
                 arm = {"fast": int(parts[0]), "slow": int(parts[1]), "vol_target": float(parts[2])}
+                if len(parts) >= 6:
+                    arm["sl_pct"] = float(parts[3])
+                    arm["tp_pct"] = float(parts[4])
+                    arm["threshold"] = float(parts[5])
                 if arm not in self.arms:
                     self.arms.append(arm)
-            except:
+            except (ValueError, IndexError):
                 continue
 
     def set_arms(self, arms_list: list[dict]):
@@ -33,7 +36,10 @@ class EpsilonGreedyBandit:
         self.arms = arms_list
 
     def _get_arm_key(self, params: dict) -> str:
-        return f"{params['fast']}_{params['slow']}_{params['vol_target']}"
+        base = f"{params['fast']}_{params['slow']}_{params['vol_target']}"
+        if 'sl_pct' in params or 'tp_pct' in params or 'threshold' in params:
+            base += f"_{params.get('sl_pct', 0.02)}_{params.get('tp_pct', 0.05)}_{params.get('threshold', 0.0005)}"
+        return base
 
     def get_best_arm(self) -> dict:
         # 1. Query DB for all arm stats

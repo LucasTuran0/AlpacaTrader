@@ -59,40 +59,25 @@ class MCPToolAdapter:
                 mcp_tools = await session.list_tools()
 
                 for t in mcp_tools.tools:
-                    # Filter official alpaca tools
                     if self.server_name == 'alpaca' and t.name not in ESSENTIAL_TOOLS:
                         continue
-                        
-                    # Capture closure variables
+
                     tool_name = t.name
                     tool_desc = t.description or ""
-                    
-                    # Create a sync wrapper that launches a new ephemeral session to call the tool
-                    # This is heavy but robust against stdio concurrency issues for now.
-                    # In production, we'd use a long-lived server process manager.
-                    
-                    async def _async_tool_func(**kwargs):
-                        # Re-connect for execution
-                        async with stdio_client(self.server_params) as (r, w):
-                            async with ClientSession(r, w) as s:
-                                await s.initialize()
-                                result = await s.call_tool(tool_name, kwargs)
-                                return result.content[0].text
 
-                    # Create StructuredTool if schema is complex, or simple Tool
-                    # For MVP, we'll use StructuredTool.from_function pattern manually
-                    # but since schema is dynamic, we define a wrapper class or use StructuredTool directly
-                    
-                    # Hack for simple binding:
-                    # We accept **kwargs and pass them through.
-                    
-                    # We need to define the schema model dyamically if we want validation,
-                    # but for now we'll rely on the LLM to just pass args as Dict.
-                    
+                    def _make_tool_func(captured_name, captured_params):
+                        async def _async_tool_func(**kwargs):
+                            async with stdio_client(captured_params) as (r, w):
+                                async with ClientSession(r, w) as s:
+                                    await s.initialize()
+                                    result = await s.call_tool(captured_name, kwargs)
+                                    return result.content[0].text
+                        return _async_tool_func
+
                     tools_out.append(StructuredTool.from_function(
-                        func=None, # Sync
-                        coroutine=_async_tool_func, # Async
-                        name=f"{self.server_name}_{tool_name}", # Namespaced
+                        func=None,
+                        coroutine=_make_tool_func(tool_name, self.server_params),
+                        name=f"{self.server_name}_{tool_name}",
                         description=tool_desc
                     ))
                     

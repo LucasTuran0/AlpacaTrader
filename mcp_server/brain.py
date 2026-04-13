@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # We point to the local FastAPI for bot logic
-API_URL = "http://localhost:8012"
+API_URL = os.getenv("BOT_API_URL", "http://localhost:8000")
 
 mcp = FastMCP("PaperPilot Brain")
 

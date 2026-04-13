@@ -72,9 +72,11 @@ class StrategyAdvisor:
             for adj in advice.get("adjustments", []):
                 key = adj["param_key"]
                 delta = adj["weight_delta"]
-                # Update reward in DB
-                bandit.update_reward(key, delta)
-                applied.append(f"Adjusted {key} by {delta}: {adj['reason']}")
+                parts = key.split("_")
+                if len(parts) >= 3:
+                    params = {"fast": int(parts[0]), "slow": int(parts[1]), "vol_target": float(parts[2])}
+                    bandit.update_arm(params, delta)
+                    applied.append(f"Adjusted {key} by {delta}: {adj['reason']}")
             
             return "\n".join(applied)
         except Exception as e:

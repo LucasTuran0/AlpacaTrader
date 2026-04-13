@@ -52,7 +52,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
+            except Exception:
                 pass
 
 manager = ConnectionManager()
@@ -61,11 +61,10 @@ class WebSocketHandler(logging.Handler):
     def emit(self, record):
         log_entry = self.format(record)
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(manager.broadcast(log_entry))
-        except:
-             pass
+            loop = asyncio.get_running_loop()
+            loop.create_task(manager.broadcast(log_entry))
+        except RuntimeError:
+            pass
 
 logging.basicConfig(level=logging.INFO)
 ws_handler = WebSocketHandler()
@@ -200,16 +199,18 @@ def liquidate_all_positions():
             except Exception as e:
                 logger.error(f"Failed to cancel open orders for {symbol}: {e}")
         
-        # 2. Close all positions
+        # 2. Close all positions (handle both long and short)
         positions = trading_client.get_all_positions()
         for p in positions:
             if p.symbol in TRADED_SYMBOLS:
-                logger.info(f"Selling {p.qty} of {p.symbol} for EOD...")
+                qty = abs(float(p.qty))
+                side = OrderSide.SELL if float(p.qty) > 0 else OrderSide.BUY
+                logger.info(f"Closing {p.qty} of {p.symbol} ({side.value}) for EOD...")
                 try:
                     trading_client.submit_order(MarketOrderRequest(
                         symbol=p.symbol,
-                        qty=p.qty,
-                        side=OrderSide.SELL,
+                        qty=qty,
+                        side=side,
                         time_in_force=TimeInForce.DAY
                     ))
                 except Exception as e:
@@ -284,8 +285,7 @@ async def execute_bot_cycle(dry_run: bool = False):
         # Fallback to equity if cash is weird, but try cash.
         try:
             available_cash = float(acct.cash) 
-        except:
-             # Fallback for accounts where cash isn't direct (though it usually is)
+        except (AttributeError, TypeError, ValueError):
             available_cash = float(acct.non_marginable_buying_power)
 
         strategy_budget = available_cash + managed_equity
@@ -302,21 +302,7 @@ async def execute_bot_cycle(dry_run: bool = False):
         params_used = {"fast": 20, "slow": 60, "vol_target": 0.10} if dry_run else bandit.choose_arm()
         logger.info(f"Selected Params: {params_used}")
 
-        signals = compute_signal(
-            bars, 
-            fast_window=params_used['fast'], 
-            slow_window=params_used['slow'],
-            threshold=params_used.get('threshold', 0.0005)
-        )
-        current_vol = compute_volatility(bars, timeframe="1m")
-        # Use strategy_budget instead of total equity
-        targets = size_position(signals, current_vol, account_value=strategy_budget, vol_target=params_used['vol_target'])
-        
-        alpaca_positions = trading_client.get_all_positions()
-        current_positions = [{"symbol": p.symbol, "qty": float(p.qty)} for p in alpaca_positions]
         latest_prices = bars['close'].groupby(level=0).last().to_dict()
-        # Pass whitelist to ONLY trade our symbols
-        orders_to_place = calculate_orders(current_positions, targets, latest_prices, only_allow_symbols=symbols)
 
         logging_svc = LoggingService(db)
         metrics_svc = MetricsService(db)
@@ -324,15 +310,7 @@ async def execute_bot_cycle(dry_run: bool = False):
         # --- AGENTIC FLOW ---
         agent = AgenticExecutor()
         
-        # Try to get a real VIX proxy (SPY is usually in symbols)
         vix_val = 20.0
-        try:
-             if 'SPY' in bars.index.get_level_values(0):
-                 # This is a very rough proxy if we don't have actual VIX data
-                 # Better: fetch VIX from yfinance or just use 20 as default
-                 vix_val = 20.0 # Placeholder
-        except:
-             pass
 
         market_context = {
             "equity": equity,
@@ -354,12 +332,10 @@ async def execute_bot_cycle(dry_run: bool = False):
             slow_window=params_used['slow'],
             threshold=params_used.get('threshold', 0.0005)
         )
-        current_vol = compute_volatility(bars, timeframe="5m")
-        current_vol = compute_volatility(bars, timeframe="5m")
+        current_vol = compute_volatility(bars, timeframe="1m")
         targets = size_position(signals, current_vol, account_value=strategy_budget, vol_target=params_used['vol_target'])
         
         alpaca_positions = trading_client.get_all_positions()
-        current_positions = [{"symbol": p.symbol, "qty": float(p.qty)} for p in alpaca_positions]
         current_positions = [{"symbol": p.symbol, "qty": float(p.qty)} for p in alpaca_positions]
         orders_to_place = calculate_orders(current_positions, targets, latest_prices, only_allow_symbols=symbols)
 
