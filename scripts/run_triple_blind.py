@@ -4,8 +4,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
 from datetime import datetime, timedelta
 from backend.backtest import run_backtest
-from backend.db import SessionLocal
-from backend.models import BanditState
 
 def run_triple_blind_test():
     logging.basicConfig(level=logging.INFO)

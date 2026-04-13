@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from backend.models import DailyEquity, Decision
 from datetime import datetime
 import pandas as pd
@@ -8,12 +9,15 @@ class MetricsService:
         self.db = db
 
     def record_daily_equity(self, equity: float):
-        # In a real app we'd fetch historical or ensure only 1 per day
-        # MVP: just insert a record
+        high_water_mark = self.db.query(func.max(DailyEquity.equity)).scalar() or equity
+        high_water_mark = max(high_water_mark, equity)
+        drawdown_pct = 0.0
+        if high_water_mark > 0:
+            drawdown_pct = (high_water_mark - equity) / high_water_mark * 100
+
         rec = DailyEquity(
             equity=equity,
-            # Drawdown calc requires history, MVP placeholder
-            drawdown_pct=0.0
+            drawdown_pct=drawdown_pct
         )
         self.db.add(rec)
         self.db.commit()

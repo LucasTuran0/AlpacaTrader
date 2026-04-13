@@ -31,7 +31,7 @@ def run_deep_training_session():
     run_backtest(days_to_sim=1260, reset_bandit=True, is_training=True, inject_arms=grid)
     
     logger.info("Waiting for AI Advisor to analyze Epoch 1...")
-    subprocess.run(["python", "run_advisor.py"])
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "run_advisor.py")])
     
     # 2. GENERATION 2: CONVERSION & MUTATION
     logger.info("\n--- EPOCH 2: Genetic Mutation & Neighborhood Search ---")
@@ -49,7 +49,7 @@ def run_deep_training_session():
     run_backtest(days_to_sim=1260, reset_bandit=False, is_training=True, inject_arms=mutations)
     
     logger.info("Waiting for AI Advisor to analyze Epoch 2...")
-    subprocess.run(["python", "run_advisor.py"])
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "run_advisor.py")])
     
     # 3. GENERATION 3: FINAL LOCKING
     logger.info("\n--- EPOCH 3: Final Convergence & AI Retrospective ---")

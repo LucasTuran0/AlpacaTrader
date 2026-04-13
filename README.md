@@ -1,62 +1,188 @@
 # AlpacaTrader
 
-## Overview
-AlpacaTrader is an automated trading bot integrating the Alpaca Trading API, an Epsilon-Greedy Multi-Armed Bandit machine learning module, and an AI agent executor powered by LangGraph. It is designed to trade high-momentum equities (such as the 'Mag-7' and leveraged ETFs like TQQQ) based on dynamically updating moving averages and volatility targeting. The system reacts to 1-minute streaming market data to evaluate and execute trades.
+An automated equities trading system built on the Alpaca API. Combines time-series momentum signals, volatility-aware position sizing, an epsilon-greedy multi-armed bandit for parameter optimization, and an AI agent layer powered by LangGraph and Google Gemini.
 
-## System Architecture
-- **Backend API**: A FastAPI application handles REST endpoints, background task scheduling, and WebSocket-based telemetry broadcasting.
-- **Trading Engine**: Execution logic relies on the `alpaca-py` library to stream real-time price data and route market orders.
-- **Machine Learning**: Located in `backend/learning.py`, the system implements an Epsilon-Greedy Bandit model. It continuously evaluates historical trade outcomes to dynamically select the most profitable fast/slow moving average periods and volatility constraints.
-- **Agentic Intelligence**: A LangGraph state machine (`backend/agency/`) and an integrated Model Context Protocol (MCP) client (`agent/mcp_client.py`) evaluate positions, act on discretionary overrides, and monitor portfolio health using large language models.
-- **Database**: A local SQLite database (`alpaca_trader_v3.db`) stores performance metrics, explicit PnL records, and the internal state parameters of the Multi-Armed Bandit model using SQLAlchemy.
+## Architecture
+
+```
+Frontend (React + Vite)         Backend (FastAPI)              External
+┌──────────────────────┐   ┌────────────────────────────┐   ┌──────────────┐
+│ Dashboard            │   │ REST API + WebSocket Logs   │   │ Alpaca API   │
+│ Equity Chart         │──>│ Bot Cycle Engine            │──>│ (Trading +   │
+│ Bandit Stats Table   │   │ Sentinel Shield (VIX+News)  │   │  Streaming)  │
+│ Live Log Stream      │   │ Bandit Learning Module      │   ├──────────────┤
+│ Bot Controls         │   │ APScheduler (EOD Liquidate) │   │ Yahoo Finance│
+└──────────────────────┘   │ Alembic (DB Migrations)     │   │ (VIX data)   │
+                           └─────────┬──────────────────┘   ├──────────────┤
+                                     │                       │ Google Gemini│
+                                     v                       │ (Sentiment)  │
+                           ┌─────────────────┐               └──────────────┘
+                           │ SQLite (WAL mode)│
+                           └─────────────────┘
+```
 
 ## Key Features
-- **Live WebSocket Integration**: Maintains a persistent connection to Alpaca's data streams (`backend/services/streaming.py`) for instantaneous reaction to bar closes.
-- **Dynamic Parameter Optimization**: The Epsilon-Greedy Bandit algorithm actively records the profit/loss of trades tied to specific parameter sets ("arms"). It heavily favors the most profitable historical strategy while sustaining an epsilon exploration rate to adapt to changing market conditions.
-- **Automated Risk Management**: A persistent background scheduler systematically liquidates all open positions at 3:53 PM ET daily, preventing overnight exposure risk.
-- **Systematic Backtesting Suite**: The project includes extensive logic for backtesting, walk-forward analysis, blind tests, and broad stress testing (`scripts/`).
 
-## Setup and Installation
+- **Live Streaming**: Persistent WebSocket connections to Alpaca for instant reaction to price moves with auto-reconnect on disconnect.
+- **Adaptive Parameters**: Epsilon-greedy bandit records PnL per strategy parameter set and shifts toward the most profitable configuration over time.
+- **VIX Regime Detection**: Live VIX fetching with three risk modes -- SAFE (<25), SHIELD_ACTIVE (25-35), and CRISIS (>35) -- that automatically scale position sizes.
+- **AI Sentiment Analysis**: LLM-powered news headline analysis to detect extreme bearish sentiment and block entries.
+- **Bracket Orders**: Every entry uses bracket orders with take-profit and stop-loss legs for automated risk management.
+- **EOD Liquidation**: Background scheduler closes all positions at 3:53 PM ET to avoid overnight exposure.
+- **Position Limits**: Configurable maximum concurrent positions (default 6) to prevent overexposure.
+- **Backtesting Suite**: Walk-forward validation, blind out-of-sample testing, Monte Carlo robustness analysis, and flash crash stress testing.
 
-1. **Environment Variables**: Create a `.env` file in the root directory and configure the minimum required keys:
-   ```env
-   ALPACA_API_KEY=your_alpaca_key
-   ALPACA_API_SECRET=your_alpaca_secret
-   PAPER=True
-   GOOGLE_API_KEY=your_gemini_api_key
-   ```
+## Setup
 
-2. **Python Environment setup**:
-   It is recommended to use a virtual environment. Install all required dependencies from the backend constraints list:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Or .venv\Scripts\Activate.ps1 on Windows
-   pip install -r backend/requirements.txt
-   ```
+### Prerequisites
 
-3. **Database Initialization**:
-   The backend initializes the core SQLite database tables automatically upon the first startup via the `backend/db.py` declarative base.
+- Python 3.10+
+- Node.js 20+
+- Alpaca account (paper or live)
+- Google API key (for Gemini AI features)
 
-## Usage
+### 1. Environment Variables
 
-### Running the API Server
-Start the background daemon and FastAPI server:
+Copy the example and fill in your keys:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
+- `ALPACA_API_KEY` - Your Alpaca API key
+- `ALPACA_API_SECRET` - Your Alpaca secret key
+- `ALPACA_PAPER` - `true` for paper trading, `false` for live
+- `GOOGLE_API_KEY` - Google Gemini API key
+
+### 2. Backend Setup
+
+```bash
+python -m venv .venv
+# Linux/Mac:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\Activate.ps1
+
+pip install -r backend/requirements.txt
+```
+
+### 3. Frontend Setup
+
+```bash
+cd frontend
+npm install
+```
+
+### 4. Database Migrations
+
+Tables are auto-created on first startup. For subsequent schema changes:
+
+```bash
+cd backend
+python -m alembic upgrade head
+```
+
+## Running
+
+### Development (two terminals)
+
+**Terminal 1 -- Backend:**
 ```bash
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
-Upon startup, the server boots the Alpaca streaming components, attaches the SQLite data sessions, scopes the agent execution graph, and schedules end-of-day liquidation routines.
 
-### Strategy Operations and Analysis
-The `scripts/` directory houses dedicated CLI execution paths to evaluate, tune, and test the trading logic without activating the main API daemon:
-- `run_deep_training.py`: Executes batched evaluation of complex parameter constraints using large historical context windows.
-- `run_blind_test.py`: Conducts out-of-sample testing to validate the strategy against overfitting.
-- `run_walk_forward.py`: Re-evaluates baseline parameter validity by sweeping sequentially across historical blocks of data.
-- `analyze_blind_results.py`: Computes base statistical significance (including standard metrics like Sharpe ratio, max drawdown, and overall win rate) relative to the backtest logs.
+**Terminal 2 -- Frontend:**
+```bash
+cd frontend
+npm run dev
+```
 
-## Core Trading Logic
-By default, the strategy analyzes standard asset constraints based on:
-- Fast Moving Average (e.g., 10 periods)
-- Slow Moving Average (e.g., 30 periods)
-- Volatility Target (e.g., 0.25)
+Then open http://localhost:3000.
 
-These periods are not static. The `EpsilonGreedyBandit` stores each chosen parameter pair and its subsequent real-world execution state. The overall success rate and average monetary return per parameter sequence adjust the statistical density for future decisions, shifting the active periods automatically throughout standard operation.
+### Docker
+
+```bash
+docker compose up --build
+```
+
+This starts both the backend (port 8000) and frontend (port 3000).
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| GET | `/account` | Account equity and buying power |
+| POST | `/bot/run_once` | Trigger a single bot cycle (`{"dry_run": true/false}`) |
+| POST | `/bot/backtest` | Start a background backtest |
+| GET | `/bot/metrics` | Equity history, drawdown, run count |
+| GET | `/bot/bandit_stats` | All bandit arms sorted by avg reward |
+| GET | `/bot/logs` | Recent decision logs |
+| POST | `/bot/feedback` | Manual reward feedback for a decision |
+| WS | `/ws/logs` | Live log stream via WebSocket |
+| POST | `/orders/market` | Place a manual market order |
+
+## Scripts
+
+All scripts are in `scripts/` and should be run from the repo root:
+
+| Script | Purpose |
+|--------|---------|
+| `run_deep_training.py` | Multi-epoch parameter grid search with AI advisor refinement |
+| `run_scalp_training.py` | Intraday 1-minute bar optimization |
+| `run_walk_forward.py` | Train/test split validation (2 years train, 1 year test) |
+| `run_blind_test.py` | Out-of-sample validation with locked parameters |
+| `run_triple_blind.py` | 1000-day train + 90-day blind test |
+| `run_stress_test.py` | Monte Carlo robustness analysis (1000 shuffled timelines) |
+| `run_gauntlet.py` | Flash crash resilience + 4-stage walk-forward evolution |
+| `run_agent.py` | Interactive AI agent with MCP tools |
+| `run_advisor.py` | AI retrospective analysis of recent trades |
+| `analyze_blind_results.py` | Statistical summary of blind test results |
+| `check_positions.py` | Print current Alpaca positions |
+
+## Testing
+
+Run unit tests:
+
+```bash
+pytest tests/ -m "not integration" -v
+```
+
+Run integration tests (requires running server):
+
+```bash
+pytest tests/ -m integration -v
+```
+
+## Project Structure
+
+```
+AlpacaTrader/
+├── backend/
+│   ├── app.py              # FastAPI server, bot cycle, EOD scheduler
+│   ├── config.py           # Traded symbols and default params
+│   ├── db.py               # SQLAlchemy engine (SQLite WAL mode)
+│   ├── models.py           # Decision, Order, DailyEquity, BanditState
+│   ├── learning.py         # Epsilon-greedy multi-armed bandit
+│   ├── market_data.py      # Alpaca bars, news, VIX, latest trades
+│   ├── backtest.py         # Backtesting engine
+│   ├── agency/             # LangGraph agent (sentinel, strategy, executor)
+│   ├── services/           # Execution, streaming, metrics, logging, etc.
+│   ├── strategy/           # Signal computation and risk/sizing
+│   └── alembic/            # Database migrations
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx         # Dashboard layout
+│   │   ├── components/     # Header, EquityChart, BanditStats, LogStream, Controls
+│   │   ├── hooks/          # useWebSocket
+│   │   └── lib/            # API client
+│   └── vite.config.ts      # Vite + Tailwind + proxy config
+├── agent/                  # MCP client and LangGraph agent
+├── mcp_server/             # FastMCP brain server + vendored Alpaca MCP
+├── scripts/                # Training, testing, and debug scripts
+├── tests/                  # Unit and integration tests
+├── Dockerfile
+├── docker-compose.yml
+└── .github/workflows/ci.yml
+```

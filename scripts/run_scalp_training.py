@@ -38,7 +38,7 @@ def run_scalp_training():
     run_backtest(days_to_sim=30, reset_bandit=True, is_training=True, inject_arms=grid, timeframe="1m")
 
     logger.info("Waiting for AI Advisor to refine Scalp parameters...")
-    subprocess.run(["python", "run_advisor.py"])
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "run_advisor.py")])
 
     # EPOCH 2: High-Density Refinement
     logger.info("\n--- EPOCH 2: High-Density Refinement ---")
@@ -54,7 +54,7 @@ def run_scalp_training():
     run_backtest(days_to_sim=30, reset_bandit=False, is_training=True, inject_arms=mutations, timeframe="1m")
     
     logger.info("Waiting for AI Advisor for Final Calibration...")
-    subprocess.run(["python", "run_advisor.py"])
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "run_advisor.py")])
 
     logger.info("\n Scalp Calibration Complete! High-Velocity parameters are now live.")
 

@@ -5,29 +5,20 @@ def calculate_orders(
     current_positions: List[Dict[str, Any]], 
     target_values: Dict[str, float], 
     current_prices: Dict[str, float],
-    only_allow_symbols: list[str] = None
+    only_allow_symbols: list[str] = None,
+    max_positions: int = 6
 ) -> List[Dict[str, Any]]:
     """
     Generates orders to move from current positions to target values.
-    
-    Args:
-        current_positions: List of dicts (alpaca position objects or dicts).
-        target_values: Dict {symbol: target_market_value_usd}.
-        current_prices: Dict {symbol: current_price_usd}.
-        only_allow_symbols: Optional whitelist. If provided, ignores symbols not in this list.
-        
-    Returns:
-        List of order dicts.
+    Enforces a maximum number of concurrent positions.
     """
-    orders = []
+    buy_orders = []
+    sell_orders = []
     
-    # Map current qty per symbol
     current_qtys = {p['symbol']: float(p['qty']) for p in current_positions}
     
-    # Union of all symbols
     all_symbols = set(current_qtys.keys()) | set(target_values.keys())
     
-    # Filter to whitelist if provided
     if only_allow_symbols is not None:
         allowed_set = set(only_allow_symbols)
         all_symbols = [s for s in all_symbols if s in allowed_set]
@@ -38,13 +29,9 @@ def calculate_orders(
         price = current_prices.get(symbol)
         
         if not price:
-            # Cannot trade without price
             continue
             
-        # Calculate target qty
-        # Floor to integer for MVP simplicity (though fractional is supported by Alpaca)
         target_qty = floor(target_val / price)
-        
         diff_qty = target_qty - curr_qty
         
         if diff_qty == 0:
@@ -54,12 +41,31 @@ def calculate_orders(
         abs_qty = int(abs(diff_qty))
         
         if abs_qty > 0:
-            orders.append({
+            order = {
                 "symbol": symbol,
                 "qty": abs_qty,
                 "side": side,
                 "type": "market",
-                "time_in_force": "day"
-            })
-            
-    return orders
+                "time_in_force": "day",
+                "_target_val": abs(target_val),
+            }
+            if side == "buy":
+                buy_orders.append(order)
+            else:
+                sell_orders.append(order)
+
+    # Enforce position limit: count current held + new buys
+    current_held = sum(1 for q in current_qtys.values() if q > 0)
+    available_slots = max(0, max_positions - current_held)
+
+    if len(buy_orders) > available_slots:
+        buy_orders.sort(key=lambda o: o["_target_val"], reverse=True)
+        buy_orders = buy_orders[:available_slots]
+
+    # Strip internal sort key before returning
+    for o in buy_orders:
+        o.pop("_target_val", None)
+    for o in sell_orders:
+        o.pop("_target_val", None)
+
+    return sell_orders + buy_orders

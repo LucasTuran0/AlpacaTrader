@@ -16,3 +16,6 @@ langchain-google-genai
 apscheduler
 pytz
 httpx
+pytest
+ruff
+alembic

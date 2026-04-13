@@ -73,6 +73,10 @@ class EpsilonGreedyBandit:
             # Exploit: Best historical arm
             return self.get_best_arm()
 
+    def get_state(self) -> list:
+        """Returns all BanditState records."""
+        return self.db.query(BanditState).all()
+
     def update_arm(self, params: dict, reward: float):
         """Updates the running stats for the chosen arm."""
         key = self._get_arm_key(params)

@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import logging.handlers
 import asyncio
 from typing import List
 from datetime import datetime
@@ -67,9 +68,19 @@ class WebSocketHandler(logging.Handler):
             pass
 
 logging.basicConfig(level=logging.INFO)
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 ws_handler = WebSocketHandler()
-ws_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+ws_handler.setFormatter(log_formatter)
 logging.getLogger().addHandler(ws_handler)
+
+os.makedirs("logs", exist_ok=True)
+file_handler = logging.handlers.RotatingFileHandler(
+    "logs/paperpilot.log", maxBytes=5 * 1024 * 1024, backupCount=3
+)
+file_handler.setFormatter(log_formatter)
+logging.getLogger().addHandler(file_handler)
+
 logger = logging.getLogger("PaperPilot")
 
 # --- Globals ---
@@ -82,6 +93,10 @@ if not API_KEY or not API_SECRET:
 
 trading_client = TradingClient(API_KEY, API_SECRET, paper=PAPER)
 market_provider = MarketDataProvider()
+
+# --- Runtime Overrides (settable via API) ---
+risk_override: str | None = None  # None = use auto-detection, or "SAFE"/"SHIELD_ACTIVE"/"CRISIS"
+bandit_epsilon_override: float | None = None  # None = use default from EpsilonGreedyBandit
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,55 +126,56 @@ async def handle_trade_update(data):
     """
     Called by AlpacaStreamingService when an order event occurs.
     Updates the bandit based on PnL of closed trades.
+    Retries on SQLite lock errors.
     """
-    db = SessionLocal()
-    try:
-        event = data.event
-        order = data.order
-        symbol = order.symbol
-        alpaca_id = str(order.id)
-        
-        # 1. Update order status in DB
-        db_order = db.query(Order).filter(Order.alpaca_id == alpaca_id).first()
-        if not db_order:
-            # Might be a child order we haven't seen yet, or from a previous run
-            # Try to find by parent_id if it's a child
-            parent_id = getattr(order, 'parent_id', None)
-            if parent_id:
-                db_order = db.query(Order).filter(Order.alpaca_id == str(parent_id)).first()
-        
-        if db_order:
-            db_order.status = event
-            if event == "fill":
-                fill_price = float(order.filled_avg_price)
-                
-                # Check if it's an EXIT order (child of a bracket)
-                is_exit = hasattr(order, 'parent_id') and order.parent_id is not None
-                
-                if not is_exit:
-                    # ENTRY Filled: Record entry price for later PnL
-                    db_order.entry_price = fill_price
-                    logger.info(f" ENTRY Filled: {symbol} at {fill_price}")
-                else:
-                    # EXIT Filled: Calculate PnL and UPDATE BANDIT
-                    entry_price = db_order.entry_price
-                    if entry_price:
-                        side_mult = 1 if db_order.side == "buy" else -1
-                        pnl_pct = (fill_price - entry_price) / entry_price * side_mult
-                        
-                        # Find the Decision that triggered this
-                        decision = db.query(Decision).filter(Decision.run_id == db_order.run_id).first()
-                        if decision:
-                            bandit = EpsilonGreedyBandit(db)
-                            bandit.update_arm(decision.params_used, pnl_pct)
-                            decision.reward = (decision.reward or 0) + pnl_pct
-                            logger.info(f" PROFIT TAKEN: {symbol} PnL: {pnl_pct:.2%}. Bandit Optimized.")
+    for attempt in range(3):
+        db = SessionLocal()
+        try:
+            event = data.event
+            order = data.order
+            symbol = order.symbol
+            alpaca_id = str(order.id)
             
-            db.commit()
-    except Exception as e:
-        logger.error(f"Error in handle_trade_update: {e}")
-    finally:
-        db.close()
+            db_order = db.query(Order).filter(Order.alpaca_id == alpaca_id).first()
+            if not db_order:
+                parent_id = getattr(order, 'parent_id', None)
+                if parent_id:
+                    db_order = db.query(Order).filter(Order.alpaca_id == str(parent_id)).first()
+            
+            if db_order:
+                db_order.status = event
+                if event == "fill":
+                    fill_price = float(order.filled_avg_price)
+                    is_exit = hasattr(order, 'parent_id') and order.parent_id is not None
+                    
+                    if not is_exit:
+                        db_order.entry_price = fill_price
+                        logger.info(f" ENTRY Filled: {symbol} at {fill_price}")
+                    else:
+                        entry_price = db_order.entry_price
+                        if entry_price:
+                            side_mult = 1 if db_order.side == "buy" else -1
+                            pnl_pct = (fill_price - entry_price) / entry_price * side_mult
+                            
+                            decision = db.query(Decision).filter(Decision.run_id == db_order.run_id).first()
+                            if decision:
+                                bandit = EpsilonGreedyBandit(db)
+                                bandit.update_arm(decision.params_used, pnl_pct)
+                                decision.reward = (decision.reward or 0) + pnl_pct
+                                logger.info(f" PROFIT TAKEN: {symbol} PnL: {pnl_pct:.2%}. Bandit Optimized.")
+                
+                db.commit()
+            return
+        except Exception as e:
+            db.rollback()
+            if "database is locked" in str(e) and attempt < 2:
+                logger.warning(f"DB locked on trade update, retrying ({attempt + 1}/3)...")
+                await asyncio.sleep(0.1 * (attempt + 1))
+                continue
+            logger.error(f"Error in handle_trade_update: {e}")
+            return
+        finally:
+            db.close()
 
 app = FastAPI(title="Alpaca Paper Trader API", version="0.1.0", lifespan=lifespan)
 
@@ -298,7 +314,8 @@ async def execute_bot_cycle(dry_run: bool = False):
         # Still track total equity for metrics/agent context
         equity = float(acct.equity)
 
-        bandit = EpsilonGreedyBandit(db)
+        eps = bandit_epsilon_override if bandit_epsilon_override is not None else 0.2
+        bandit = EpsilonGreedyBandit(db, epsilon=eps)
         params_used = {"fast": 20, "slow": 60, "vol_target": 0.10} if dry_run else bandit.choose_arm()
         logger.info(f"Selected Params: {params_used}")
 
@@ -310,7 +327,7 @@ async def execute_bot_cycle(dry_run: bool = False):
         # --- AGENTIC FLOW ---
         agent = AgenticExecutor()
         
-        vix_val = 20.0
+        vix_val = market_provider.get_vix()
 
         market_context = {
             "equity": equity,
@@ -333,7 +350,7 @@ async def execute_bot_cycle(dry_run: bool = False):
             threshold=params_used.get('threshold', 0.0005)
         )
         current_vol = compute_volatility(bars, timeframe="1m")
-        targets = size_position(signals, current_vol, account_value=strategy_budget, vol_target=params_used['vol_target'])
+        targets = size_position(signals, current_vol, account_value=strategy_budget, vol_target=params_used['vol_target'], vix_value=vix_val)
         
         alpaca_positions = trading_client.get_all_positions()
         current_positions = [{"symbol": p.symbol, "qty": float(p.qty)} for p in alpaca_positions]
@@ -499,6 +516,85 @@ def health(): return {"ok": True}
 def account():
     acct = trading_client.get_account()
     return {"equity": float(acct.equity), "buying_power": float(acct.buying_power)}
+
+@app.get("/bot/risk_status")
+def get_risk_status():
+    global risk_override
+    vix_val = market_provider.get_vix()
+    from backend.agency.sentinel import SentinelShield
+    sentinel = SentinelShield()
+    auto_regime = sentinel.analyze_vix_regime(vix_val)
+    active_regime = risk_override if risk_override else auto_regime
+
+    tz_ny = pytz.timezone("America/New_York")
+    now_ny = datetime.now(tz_ny)
+    time_blocked = now_ny.hour == 15 and now_ny.minute >= 40
+
+    return {
+        "vix": round(vix_val, 2),
+        "auto_regime": auto_regime,
+        "active_regime": active_regime,
+        "override_active": risk_override is not None,
+        "trading_blocked": time_blocked or active_regime == "CRISIS",
+        "block_reason": "Time cutoff (15:40 ET)" if time_blocked else ("CRISIS mode" if active_regime == "CRISIS" else None),
+    }
+
+@app.get("/bot/trade_history")
+def get_trade_history(limit: int = 20):
+    db = SessionLocal()
+    try:
+        orders = db.query(Order).filter(
+            Order.status == "fill"
+        ).order_by(Order.timestamp.desc()).limit(limit).all()
+
+        results = []
+        for o in orders:
+            decision = db.query(Decision).filter(Decision.run_id == o.run_id).first()
+            results.append({
+                "symbol": o.symbol,
+                "side": o.side,
+                "qty": o.qty,
+                "entry_price": o.entry_price,
+                "status": o.status,
+                "timestamp": o.timestamp.isoformat() if o.timestamp else None,
+                "run_id": o.run_id,
+                "params_used": decision.params_used if decision else None,
+                "reward": decision.reward if decision else None,
+            })
+        return results
+    finally:
+        db.close()
+
+class RiskOverrideIn(BaseModel):
+    mode: str | None = None  # "SAFE", "SHIELD_ACTIVE", "CRISIS", or null to clear
+
+@app.post("/bot/risk_override")
+def set_risk_override(body: RiskOverrideIn):
+    global risk_override
+    valid = {None, "SAFE", "SHIELD_ACTIVE", "CRISIS"}
+    if body.mode not in valid:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {valid}")
+    risk_override = body.mode
+    logger.info(f"Risk override set to: {risk_override}")
+    return {"risk_override": risk_override}
+
+class EpsilonIn(BaseModel):
+    epsilon: float
+
+@app.post("/bot/bandit_epsilon")
+def set_bandit_epsilon(body: EpsilonIn):
+    global bandit_epsilon_override
+    if not (0.0 <= body.epsilon <= 1.0):
+        raise HTTPException(status_code=400, detail="epsilon must be between 0.0 and 1.0")
+    bandit_epsilon_override = body.epsilon
+    logger.info(f"Bandit epsilon override set to: {bandit_epsilon_override}")
+    return {"epsilon": bandit_epsilon_override}
+
+@app.post("/bot/force_liquidate")
+def force_liquidation_endpoint():
+    logger.info("MANUAL FORCE LIQUIDATION TRIGGERED")
+    liquidate_all_positions()
+    return {"status": "liquidation_triggered"}
 
 class MarketOrderIn(BaseModel):
     symbol: str

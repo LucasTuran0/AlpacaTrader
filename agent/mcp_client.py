@@ -1,104 +1,148 @@
 import asyncio
+import logging
 import os
 import sys
 from typing import List, Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from langchain_core.tools import Tool, StructuredTool # Correct import for newer langchain
-from pydantic import BaseModel, Field
+from langchain_core.tools import StructuredTool
 
-# Load env variables for the subprocesses
+logger = logging.getLogger("MCPClient")
+
+
 def get_env():
     env = os.environ.copy()
-    # Ensure keys are present if available
     env["ALPACA_API_KEY"] = os.getenv("ALPACA_API_KEY", "")
-    env["ALPACA_SECRET_KEY"] = os.getenv("ALPACA_API_SECRET", "") # remap standard to what official server expects
+    env["ALPACA_SECRET_KEY"] = os.getenv("ALPACA_API_SECRET", "")
     env["ALPACA_PAPER"] = "True"
     return env
 
-class MCPToolAdapter:
+
+class PersistentMCPSession:
     """
-    Connects to an MCP server and adapts its tools to LangChain Tools.
+    Keeps a single MCP subprocess + session alive for the lifetime of the
+    agent run, rather than spawning a new process for every tool call.
     """
-    def __init__(self, command: str, args: List[str], server_name: str):
-        self.command = command
-        self.args = args
+
+    def __init__(self, server_params: StdioServerParameters, server_name: str):
+        self.server_params = server_params
         self.server_name = server_name
-        self.server_params = StdioServerParameters(
-            command=self.command,
-            args=self.args,
-            env=get_env()
-        )
-        self.tools = []
+        self._session: ClientSession | None = None
+        self._exit_stack: list[Any] = []
 
-    async def initialize(self):
-        # We need a way to keep the session open. 
-        # For simplicity in this script, we'll fetch schemas once and 
-        # recreate sessions for calls (inefficient but distinct for MVP),
-        # OR we keep a persistent session manager. 
-        # BETTER: Use a context manager wrapper for the whole agent run.
-        pass
+    async def connect(self):
+        ctx_client = stdio_client(self.server_params)
+        transport = await ctx_client.__aenter__()
+        self._exit_stack.append(ctx_client)
 
-    async def get_langchain_tools(self) -> List[Tool]:
-        # Connect briefly to fetch tool definitions
-        tools_out = []
-        async with stdio_client(self.server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                # Define essential tools to avoid distracting the agent
-                ESSENTIAL_TOOLS = {
-                    'get_account_info',
-                    'get_all_positions', 
-                    'get_open_position',
-                    'place_stock_order',
-                    'cancel_order_by_id',
-                    'cancel_all_orders',
-                    'get_stock_bars',
-                }
+        read_stream, write_stream = transport
+        ctx_session = ClientSession(read_stream, write_stream)
+        self._session = await ctx_session.__aenter__()
+        self._exit_stack.append(ctx_session)
 
-                mcp_tools = await session.list_tools()
+        await self._session.initialize()
+        logger.info(f"Persistent MCP session established: {self.server_name}")
 
-                for t in mcp_tools.tools:
-                    if self.server_name == 'alpaca' and t.name not in ESSENTIAL_TOOLS:
-                        continue
+    async def call_tool(self, name: str, kwargs: dict) -> str:
+        if self._session is None:
+            raise RuntimeError(f"MCP session not connected for {self.server_name}")
+        result = await self._session.call_tool(name, kwargs)
+        return result.content[0].text
 
-                    tool_name = t.name
-                    tool_desc = t.description or ""
+    async def list_tools(self):
+        if self._session is None:
+            raise RuntimeError(f"MCP session not connected for {self.server_name}")
+        return await self._session.list_tools()
 
-                    def _make_tool_func(captured_name, captured_params):
-                        async def _async_tool_func(**kwargs):
-                            async with stdio_client(captured_params) as (r, w):
-                                async with ClientSession(r, w) as s:
-                                    await s.initialize()
-                                    result = await s.call_tool(captured_name, kwargs)
-                                    return result.content[0].text
-                        return _async_tool_func
+    async def close(self):
+        for ctx in reversed(self._exit_stack):
+            try:
+                await ctx.__aexit__(None, None, None)
+            except Exception as e:
+                logger.warning(f"Error closing MCP context for {self.server_name}: {e}")
+        self._exit_stack.clear()
+        self._session = None
+        logger.info(f"MCP session closed: {self.server_name}")
 
-                    tools_out.append(StructuredTool.from_function(
+
+class MCPSessionManager:
+    """
+    Manages persistent sessions for all MCP servers. Designed to be used as
+    an async context manager around the full agent run.
+    """
+
+    ESSENTIAL_ALPACA_TOOLS = {
+        "get_account_info",
+        "get_all_positions",
+        "get_open_position",
+        "place_stock_order",
+        "cancel_order_by_id",
+        "cancel_all_orders",
+        "get_stock_bars",
+    }
+
+    def __init__(self):
+        env = get_env()
+        self._sessions: list[PersistentMCPSession] = [
+            PersistentMCPSession(
+                StdioServerParameters(
+                    command=sys.executable,
+                    args=["-m", "alpaca_mcp_server.cli", "serve"],
+                    env=env,
+                ),
+                server_name="alpaca",
+            ),
+            PersistentMCPSession(
+                StdioServerParameters(
+                    command=sys.executable,
+                    args=["mcp_server/brain.py"],
+                    env=env,
+                ),
+                server_name="brain",
+            ),
+        ]
+
+    async def __aenter__(self):
+        for session in self._sessions:
+            await session.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        for session in self._sessions:
+            await session.close()
+
+    async def get_langchain_tools(self) -> List[StructuredTool]:
+        tools_out: list[StructuredTool] = []
+
+        for session in self._sessions:
+            mcp_tools = await session.list_tools()
+
+            for t in mcp_tools.tools:
+                if session.server_name == "alpaca" and t.name not in self.ESSENTIAL_ALPACA_TOOLS:
+                    continue
+
+                tool_name = t.name
+                tool_desc = t.description or ""
+
+                def _make_tool_func(captured_session: PersistentMCPSession, captured_name: str):
+                    async def _invoke(**kwargs):
+                        return await captured_session.call_tool(captured_name, kwargs)
+                    return _invoke
+
+                tools_out.append(
+                    StructuredTool.from_function(
                         func=None,
-                        coroutine=_make_tool_func(tool_name, self.server_params),
-                        name=f"{self.server_name}_{tool_name}",
-                        description=tool_desc
-                    ))
-                    
+                        coroutine=_make_tool_func(session, tool_name),
+                        name=f"{session.server_name}_{tool_name}",
+                        description=tool_desc,
+                    )
+                )
+
         return tools_out
 
-# Factory to get all tools
+
+# Backward-compatible convenience function for scripts that don't need persistence
 async def get_all_mcp_tools():
-    # 1. Official Server
-    official = MCPToolAdapter(
-        command=sys.executable,
-        args=["-m", "alpaca_mcp_server.cli", "serve"],
-        server_name="alpaca"
-    )
-    
-    # 2. Brain Server
-    brain = MCPToolAdapter(
-        command=sys.executable,
-        args=["mcp_server/brain.py"],
-        server_name="brain"
-    )
-    
-    t1 = await official.get_langchain_tools()
-    t2 = await brain.get_langchain_tools()
-    return t1 + t2
+    manager = MCPSessionManager()
+    await manager.__aenter__()
+    return await manager.get_langchain_tools(), manager

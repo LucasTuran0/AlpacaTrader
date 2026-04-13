@@ -1,10 +1,12 @@
+"""Integration test: requires the FastAPI server running on localhost:8000."""
 import requests
-import time
 import sys
+import pytest
 
 BASE_URL = "http://localhost:8000"
 
-def run_test():
+@pytest.mark.integration
+def test_bandit_feedback_loop():
     print(f"--- Testing Bandit Learning on {BASE_URL} ---")
     
     # 1. Trigger a run
@@ -45,7 +47,7 @@ def run_test():
 
 if __name__ == "__main__":
     try:
-        run_test()
+        test_bandit_feedback_loop()
     except Exception as e:
         print(f"Test failed: {e}")
         sys.exit(1)

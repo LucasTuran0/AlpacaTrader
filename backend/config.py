@@ -1,15 +1,28 @@
 # backend/config.py
+import os
 
-# List of assets to trade (The 'Mag-7' Momentum Leaders + TQQQ)
-TRADED_SYMBOLS = ["TQQQ", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "SPY"]
+# Diversified momentum universe: core tech + sectors + hedges + high-vol
+TRADED_SYMBOLS = [
+    # High-momentum tech
+    "NVDA", "TSLA", "META", "AAPL", "MSFT", "AMZN",
+    # Leveraged tech / broad indices
+    "TQQQ", "SPY", "IWM",
+    # Uncorrelated sectors
+    "XLE", "XLF",
+    # Risk-off hedges (trend up when tech trends down)
+    "GLD", "TLT",
+    # High-volatility momentum
+    "AMD", "COIN",
+]
 
 # Strategy default parameters (Pivoting to Aggressive)
 DEFAULT_PARAMS = {
     "fast": 10,
     "slow": 30,
-    "vol_target": 0.25 # Increased from 0.10 for higher daily range
+    "vol_target": 0.25  # Increased from 0.10 for higher daily range
 }
 
-# Predator Mode: The bot is always watching via WebSockets.
-# It reacts instantly to every 1-minute bar close from Alpaca.
-# BOT_INTERVAL_MINS = 15 (DEFUNCT: Now listening to live streams)
+# When True, the LangGraph agent gets access to MCP Brain tools
+# (portfolio snapshot, risk status, bandit analysis, etc.) during its
+# decision loop, enabling deeper introspection before trading.
+AGENTIC_MODE = os.getenv("AGENTIC_MODE", "false").lower() == "true"

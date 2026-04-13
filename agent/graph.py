@@ -1,44 +1,39 @@
-from typing import Annotated, TypedDict, List
+from typing import TypedDict, List
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, BaseMessage
-from agent.mcp_client import get_all_mcp_tools
+from agent.mcp_client import MCPSessionManager
 import os
 from dotenv import load_dotenv
 
-# Load env for Keys
 load_dotenv("backend/.env")
+
 
 class AgentState(TypedDict):
     messages: List[BaseMessage]
 
+
 class PaperPilotAgent:
     def __init__(self):
-        # Using gemini-flash-latest as identified from available models
         self.model = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
         self.tools = []
         self.graph = None
+        self._session_manager: MCPSessionManager | None = None
 
     async def initialize(self):
-        # 1. Fetch tools from MCP servers
-        self.tools = await get_all_mcp_tools()
-        
-        # 2. Bind tools to model
+        self._session_manager = MCPSessionManager()
+        await self._session_manager.__aenter__()
+        self.tools = await self._session_manager.get_langchain_tools()
+
         self.model = self.model.bind_tools(self.tools)
-        
-        # 3. Define Graph
+
         workflow = StateGraph(AgentState)
-        
-        # Nodes
         workflow.add_node("agent", self.call_model)
         workflow.add_node("tools", ToolNode(self.tools))
-        
-        # Edges
         workflow.add_edge(START, "agent")
         workflow.add_conditional_edges("agent", self.should_continue)
         workflow.add_edge("tools", "agent")
-        
         self.graph = workflow.compile()
 
     def should_continue(self, state: AgentState):
@@ -54,9 +49,14 @@ class PaperPilotAgent:
     async def run(self, input_text: str):
         if not self.graph:
             await self.initialize()
-            
+
         initial_state = {"messages": [HumanMessage(content=input_text)]}
         async for event in self.graph.astream(initial_state):
             for value in event.values():
                 if "messages" in value:
                     print(f"Agent: {value['messages'][-1].content}")
+
+    async def close(self):
+        if self._session_manager:
+            await self._session_manager.__aexit__(None, None, None)
+            self._session_manager = None
