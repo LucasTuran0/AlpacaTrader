@@ -23,9 +23,10 @@ Frontend (React + Vite)         Backend (FastAPI)              External
 
 ## Key Features
 
-- **Live Streaming**: Persistent WebSocket connections to Alpaca for instant reaction to price moves with auto-reconnect on disconnect.
-- **Adaptive Parameters**: Epsilon-greedy bandit records PnL per strategy parameter set and shifts toward the most profitable configuration over time.
-- **VIX Regime Detection**: Live VIX fetching with three risk modes -- SAFE (<25), SHIELD_ACTIVE (25-35), and CRISIS (>35) -- that automatically scale position sizes.
+- **Live Streaming**: The backend uses Alpaca’s streaming APIs (`StockDataStream` for live trades, `TradingStream` for order lifecycle events) with exponential backoff reconnect. Material price moves can trigger another bot cycle. The dashboard uses a separate **FastAPI** WebSocket at `/ws/logs` to tail logs—it does not open a browser WebSocket directly to Alpaca.
+- **Adaptive Parameters**: A multi-armed bandit stores per-arm stats and updates them from **realized** trade PnL when exits fill. **Backtests** use epsilon-greedy exploration (`choose_arm`). In **live** trading, after LangGraph allows a trade, the strategy step picks the **best historical arm** (`get_best_arm`) for that cycle; the bandit still learns from outcomes so rankings improve over time.
+- **VIX regimes (Sentinel)**: Live VIX is fetched via Yahoo Finance (cached briefly). `SentinelShield` maps VIX to **SAFE** (VIX < 20), **SHIELD_ACTIVE** (20 ≤ VIX < 30), or **CRISIS** (VIX ≥ 30). **CRISIS** blocks new entries in the LangGraph strategy node. The `/bot/risk_status` endpoint reports trading blocked only for **CRISIS** (or manual override to that mode) and for the **15:40 ET** no-new-entries cutoff—not for SHIELD_ACTIVE by itself.
+- **VIX-aware position sizing**: Independently of the named regime, `size_position` scales the vol target down when **VIX > 25** (defensive) or **> 35** (much smaller targets). Regime labels and these sizing cutoffs are related but use **different thresholds**; see `backend/agency/sentinel.py` and `backend/strategy/risk.py`.
 - **AI Sentiment Analysis**: LLM-powered news headline analysis to detect extreme bearish sentiment and block entries.
 - **Bracket Orders**: Every entry uses bracket orders with take-profit and stop-loss legs for automated risk management.
 - **EOD Liquidation**: Background scheduler closes all positions at 3:53 PM ET to avoid overnight exposure.
@@ -117,6 +118,7 @@ This starts both the backend (port 8000) and frontend (port 3000).
 | POST | `/bot/run_once` | Trigger a single bot cycle (`{"dry_run": true/false}`) |
 | POST | `/bot/backtest` | Start a background backtest |
 | GET | `/bot/metrics` | Equity history, drawdown, run count |
+| GET | `/bot/risk_status` | VIX, regime (SAFE / SHIELD_ACTIVE / CRISIS), override, trading blocked |
 | GET | `/bot/bandit_stats` | All bandit arms sorted by avg reward |
 | GET | `/bot/logs` | Recent decision logs |
 | POST | `/bot/feedback` | Manual reward feedback for a decision |
