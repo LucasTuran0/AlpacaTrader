@@ -47,13 +47,21 @@ class MarketDataProvider:
         
         return df
 
-    def get_news(self, symbols: list[str], limit: int = 10) -> list:
+    def get_news(self, symbols: list[str] | str, limit: int = 10) -> list:
         """
         Fetches recent news headlines for the given symbols.
+
+        Note: alpaca-py >=0.40 types NewsRequest.symbols as a comma-separated
+        string. We accept either a list or a string here for caller convenience.
         """
+        if isinstance(symbols, (list, tuple, set)):
+            symbols_param = ",".join(symbols)
+        else:
+            symbols_param = symbols
+
         request_params = NewsRequest(
-            symbols=symbols,
-            limit=limit
+            symbols=symbols_param,
+            limit=limit,
         )
         news = self.news_client.get_news(request_params)
         return news

@@ -2,6 +2,10 @@
 
 An automated equities trading system built on the Alpaca API. Combines time-series momentum signals, volatility-aware position sizing, an epsilon-greedy multi-armed bandit for parameter optimization, and an AI agent layer powered by LangGraph and Google Gemini.
 
+## Disclaimer
+
+This project is a personal experiment for research and educational purposes. It is configured for paper trading by default. Nothing in this repository constitutes investment advice or a recommendation. Automated trading involves real financial risk; if you switch `ALPACA_PAPER` to `false` you are operating on live markets at your own risk. The authors accept no liability for losses.
+
 ## Architecture
 
 ```
@@ -24,7 +28,7 @@ Frontend (React + Vite)         Backend (FastAPI)              External
 ## Key Features
 
 - **Live Streaming**: The backend uses Alpaca’s streaming APIs (`StockDataStream` for live trades, `TradingStream` for order lifecycle events) with exponential backoff reconnect. Material price moves can trigger another bot cycle. The dashboard uses a separate **FastAPI** WebSocket at `/ws/logs` to tail logs—it does not open a browser WebSocket directly to Alpaca.
-- **Adaptive Parameters**: A multi-armed bandit stores per-arm stats and updates them from **realized** trade PnL when exits fill. **Backtests** use epsilon-greedy exploration (`choose_arm`). In **live** trading, after LangGraph allows a trade, the strategy step picks the **best historical arm** (`get_best_arm`) for that cycle; the bandit still learns from outcomes so rankings improve over time.
+- **Adaptive Parameters**: A multi-armed bandit stores per-arm stats and updates them from **realized** trade PnL when exits fill. By default, live trading uses the best historical arm (`get_best_arm`). If you set `/bot/bandit_epsilon` above `0.0`, live trading switches to epsilon-greedy exploration (`choose_arm`) using that value.
 - **VIX regimes (Sentinel)**: Live VIX is fetched via Yahoo Finance (cached briefly). `SentinelShield` maps VIX to **SAFE** (VIX < 20), **SHIELD_ACTIVE** (20 ≤ VIX < 30), or **CRISIS** (VIX ≥ 30). **CRISIS** blocks new entries in the LangGraph strategy node. The `/bot/risk_status` endpoint reports trading blocked only for **CRISIS** (or manual override to that mode) and for the **15:40 ET** no-new-entries cutoff—not for SHIELD_ACTIVE by itself.
 - **VIX-aware position sizing**: Independently of the named regime, `size_position` scales the vol target down when **VIX > 25** (defensive) or **> 35** (much smaller targets). Regime labels and these sizing cutoffs are related but use **different thresholds**; see `backend/agency/sentinel.py` and `backend/strategy/risk.py`.
 - **AI Sentiment Analysis**: LLM-powered news headline analysis to detect extreme bearish sentiment and block entries.
@@ -37,7 +41,7 @@ Frontend (React + Vite)         Backend (FastAPI)              External
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11
 - Node.js 20+
 - Alpaca account (paper or live)
 - Google API key (for Gemini AI features)
@@ -119,9 +123,13 @@ This starts both the backend (port 8000) and frontend (port 3000).
 | POST | `/bot/backtest` | Start a background backtest |
 | GET | `/bot/metrics` | Equity history, drawdown, run count |
 | GET | `/bot/risk_status` | VIX, regime (SAFE / SHIELD_ACTIVE / CRISIS), override, trading blocked |
+| POST | `/bot/risk_override` | Force SAFE/SHIELD_ACTIVE/CRISIS mode or clear override |
+| POST | `/bot/bandit_epsilon` | Set live epsilon for bandit exploration (0.0 to 1.0) |
 | GET | `/bot/bandit_stats` | All bandit arms sorted by avg reward |
 | GET | `/bot/logs` | Recent decision logs |
+| GET | `/bot/trade_history` | Recent filled trade history with run metadata |
 | POST | `/bot/feedback` | Manual reward feedback for a decision |
+| POST | `/bot/force_liquidate` | Cancel open orders and close all managed positions |
 | WS | `/ws/logs` | Live log stream via WebSocket |
 | POST | `/orders/market` | Place a manual market order |
 

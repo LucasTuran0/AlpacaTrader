@@ -10,7 +10,7 @@ logger = logging.getLogger("StreamingService")
 
 class AlpacaStreamingService:
     def __init__(self, data_callback, trade_callback):
-        load_dotenv("backend/.env")
+        load_dotenv()
         self._api_key = os.getenv("ALPACA_API_KEY")
         self._secret_key = os.getenv("ALPACA_API_SECRET")
         self._paper = os.getenv("ALPACA_PAPER", "true").lower() == "true"

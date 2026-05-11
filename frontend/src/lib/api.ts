@@ -55,3 +55,33 @@ export async function triggerBacktest(): Promise<{ status: string }> {
   const res = await fetch(`${BASE}/bot/backtest`, { method: "POST" });
   return res.json();
 }
+
+export interface RiskStatus {
+  vix: number | null;
+  auto_regime: string;
+  active_regime: string;
+  override_active: boolean;
+  trading_blocked: boolean;
+  block_reason: string | null;
+}
+
+export async function fetchRiskStatus(): Promise<RiskStatus> {
+  const res = await fetch(`${BASE}/bot/risk_status`);
+  return res.json();
+}
+
+export async function setRiskOverride(mode: string | null): Promise<{ risk_override: string | null }> {
+  const res = await fetch(`${BASE}/bot/risk_override`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function forceLiquidate(): Promise<{ status: string }> {
+  const res = await fetch(`${BASE}/bot/force_liquidate`, { method: "POST" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

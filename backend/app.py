@@ -177,7 +177,7 @@ async def handle_trade_update(data):
         finally:
             db.close()
 
-app = FastAPI(title="Alpaca Paper Trader API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AlpacaTrader API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -314,11 +314,6 @@ async def execute_bot_cycle(dry_run: bool = False):
         # Still track total equity for metrics/agent context
         equity = float(acct.equity)
 
-        eps = bandit_epsilon_override if bandit_epsilon_override is not None else 0.2
-        bandit = EpsilonGreedyBandit(db, epsilon=eps)
-        params_used = {"fast": 20, "slow": 60, "vol_target": 0.10} if dry_run else bandit.choose_arm()
-        logger.info(f"Selected Params: {params_used}")
-
         latest_prices = bars['close'].groupby(level=0).last().to_dict()
 
         logging_svc = LoggingService(db)
@@ -332,12 +327,20 @@ async def execute_bot_cycle(dry_run: bool = False):
         market_context = {
             "equity": equity,
             "vix_close": vix_val,
-            "latest_prices": latest_prices
+            "latest_prices": latest_prices,
+            "dry_run": dry_run,
+            "epsilon": bandit_epsilon_override if bandit_epsilon_override is not None else 0.2,
+            "risk_override": risk_override,
         }
         
         agent_result = await agent.run(market_context)
-        params_used = agent_result["trade_proposal"].get("params", params_used)
+        params_used = agent_result["trade_proposal"].get("params", {"fast": 20, "slow": 60, "vol_target": 0.10})
         analysis_text = agent_result["decision_reasoning"]
+        logger.info(f"Selected Params: {params_used}")
+
+        if agent_result["risk_shield_status"] == "CRISIS":
+             logging_svc.log_decision(run_id, params_used, {}, {}, [], reasoning=analysis_text)
+             return {"run_id": run_id, "status": "halted", "reason": analysis_text}
         
         if agent_result["trade_proposal"]["action"] == "HOLD":
              logging_svc.log_decision(run_id, params_used, {}, {}, [], reasoning=analysis_text)

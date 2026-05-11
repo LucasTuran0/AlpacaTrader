@@ -1,15 +1,16 @@
 import os
 from dotenv import load_dotenv
 from alpaca.trading.client import TradingClient
+import pytest
+
+pytestmark = pytest.mark.integration
 
 def test_rest_auth():
-    load_dotenv("backend/.env")
+    load_dotenv()
     api_key = os.getenv("ALPACA_API_KEY")
     secret_key = os.getenv("ALPACA_API_SECRET")
     paper = os.getenv("ALPACA_PAPER", "true").lower() == "true"
-    
-    print(f"Testing REST Auth for Key: {api_key[:4]}...")
-    
+
     try:
         client = TradingClient(api_key, secret_key, paper=paper)
         acct = client.get_account()

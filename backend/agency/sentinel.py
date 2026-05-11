@@ -36,8 +36,20 @@ class SentinelShield:
                 news = self.provider.get_news([symbol], limit=5)
                 if news is None:
                     continue
-                for item in news:
-                    headline = item.get("headline") if isinstance(item, dict) else getattr(item, "headline", "")
+                # NewsSet stores articles under .data["news"]; fall back to
+                # iterating directly if a list/raw dict was returned instead.
+                if hasattr(news, "data") and isinstance(news.data, dict):
+                    articles = news.data.get("news", [])
+                elif isinstance(news, dict):
+                    articles = news.get("news", [])
+                else:
+                    articles = list(news) if news else []
+
+                for item in articles:
+                    if isinstance(item, dict):
+                        headline = item.get("headline", "")
+                    else:
+                        headline = getattr(item, "headline", "") or ""
                     if headline:
                         headlines.append(f"[{symbol}] {headline}")
 
@@ -55,12 +67,30 @@ class SentinelShield:
 
             chain = prompt | self.llm
             response = await chain.ainvoke({"headlines": "\n".join(headlines)})
-            
+
+            # Newer langchain-google-genai returns structured content as a
+            # list of parts (e.g. [{"type": "text", "text": "0.35", ...}]).
+            # Older versions return a plain string. Handle both.
+            raw_content = response.content
+            if isinstance(raw_content, list):
+                text = "".join(
+                    (part.get("text", "") if isinstance(part, dict) else str(part))
+                    for part in raw_content
+                ).strip()
+            else:
+                text = str(raw_content).strip()
+
+            # Pull the first numeric token in case the model added prose.
+            import re
+            match = re.search(r"-?\d+(?:\.\d+)?", text)
+            if not match:
+                logger.warning(f"Failed to parse sentiment score from: {raw_content!r}")
+                return 0.0
             try:
-                score = float(response.content.strip())
+                score = float(match.group(0))
                 return max(-1.0, min(1.0, score))
-            except:
-                logger.warning(f"Failed to parse sentiment score from: {response.content}")
+            except ValueError:
+                logger.warning(f"Failed to parse sentiment score from: {raw_content!r}")
                 return 0.0
 
         except Exception as e:
@@ -71,7 +101,7 @@ if __name__ == "__main__":
     # Quick test
     import asyncio
     from dotenv import load_dotenv
-    load_dotenv("backend/.env")
+    load_dotenv()
     
     async def test():
         s = SentinelShield()

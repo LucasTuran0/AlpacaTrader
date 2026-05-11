@@ -3,16 +3,19 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 import sys
 import os
+import pytest
 
 from dotenv import load_dotenv
 
-load_dotenv("backend/.env")
+load_dotenv()
 
 # Set env for subprocesses
 env = os.environ.copy()
 env["ALPACA_API_KEY"] = os.getenv("ALPACA_API_KEY", "")
 env["ALPACA_SECRET_KEY"] = os.getenv("ALPACA_API_SECRET", "")
 env["ALPACA_PAPER"] = "True"
+
+pytestmark = pytest.mark.integration
 
 async def test_brain():
     print("--- Testing Custom Brain MCP ---")

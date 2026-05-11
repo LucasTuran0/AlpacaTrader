@@ -43,18 +43,23 @@ async def sentinel_node(state: AgentState):
     sentinel = SentinelShield()
 
     vix = state["market_context"].get("vix_close", 20.0)
-    regime = sentinel.analyze_vix_regime(vix)
+    auto_regime = sentinel.analyze_vix_regime(vix)
+    override_mode = state["market_context"].get("risk_override")
 
     sentiment_score = await sentinel.analyze_sentiment(TRADED_SYMBOLS[:3])
 
-    status = regime
-    if sentiment_score < -0.5:
+    status = auto_regime
+    if override_mode is not None:
+        status = override_mode
+    elif sentiment_score < -0.5:
         status = "SHIELD_ACTIVE"
+
+    regime_text = f"override={override_mode}" if override_mode is not None else f"auto={auto_regime}"
 
     return {
         "risk_shield_status": status,
         "market_context": {**state["market_context"], "sentiment": sentiment_score},
-        "decision_reasoning": f"[Sentinel] Regime: {regime}, Sentiment: {sentiment_score:.2f}.",
+        "decision_reasoning": f"[Sentinel] Regime: {regime_text}, Sentiment: {sentiment_score:.2f}.",
     }
 
 
@@ -89,20 +94,32 @@ def strategy_node(state: AgentState):
             "decision_reasoning": state["decision_reasoning"] + " (CRISIS mode: Trades blocked)",
         }
 
+    if state["market_context"].get("dry_run", False):
+        dry_params = {"fast": 20, "slow": 60, "vol_target": 0.10}
+        return {
+            "trade_proposal": {
+                "action": "TRADE",
+                "params": dry_params,
+                "reason": "Dry run fixed params",
+            },
+            "decision_reasoning": state["decision_reasoning"] + f" [Strategy] Dry run params {dry_params}.",
+        }
+
     db = SessionLocal()
     try:
-        bandit = EpsilonGreedyBandit(db)
-        best_arm = bandit.get_best_arm()
+        eps = float(state["market_context"].get("epsilon", 0.2))
+        bandit = EpsilonGreedyBandit(db, epsilon=eps)
+        selected_arm = bandit.choose_arm() if eps > 0 else bandit.get_best_arm()
 
         proposal = {
             "action": "TRADE",
-            "params": best_arm,
-            "reason": "Bandit Optimized",
+            "params": selected_arm,
+            "reason": f"Bandit epsilon={eps:.2f}",
         }
 
         return {
             "trade_proposal": proposal,
-            "decision_reasoning": state["decision_reasoning"] + f" [Strategy] Selected {best_arm}.",
+            "decision_reasoning": state["decision_reasoning"] + f" [Strategy] Selected {selected_arm} (epsilon={eps:.2f}).",
         }
     finally:
         db.close()

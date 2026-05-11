@@ -3,7 +3,8 @@ import { Wifi, WifiOff } from "lucide-react";
 import { useWebSocket } from "../hooks/useWebSocket";
 
 export default function LogStream() {
-  const wsUrl = `ws://${window.location.hostname}:8000/ws/logs`;
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${proto}//${window.location.host}/ws/logs`;
   const { messages, connected } = useWebSocket(wsUrl);
   const bottomRef = useRef<HTMLDivElement>(null);
 
