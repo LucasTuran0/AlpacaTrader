@@ -1,6 +1,6 @@
 import Header from "./components/Header";
 import EquityChart from "./components/EquityChart";
-import BanditStats from "./components/BanditStats";
+import TradeHistory from "./components/TradeHistory";
 import LogStream from "./components/LogStream";
 import Controls from "./components/Controls";
 
@@ -13,7 +13,7 @@ export default function App() {
         <Controls />
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <BanditStats />
+        <TradeHistory />
         <LogStream />
       </div>
     </div>

@@ -19,6 +19,18 @@ export interface BanditArm {
   avg_reward: number;
 }
 
+export interface TradeHistoryItem {
+  symbol: string;
+  side: string;
+  qty: number;
+  entry_price: number | null;
+  status: string;
+  timestamp: string | null;
+  run_id: string;
+  params_used: Record<string, number> | null;
+  reward: number | null;
+}
+
 export interface BotRunResult {
   run_id: string;
   status: string;
@@ -39,6 +51,11 @@ export async function fetchMetrics(): Promise<Metrics> {
 
 export async function fetchBanditStats(): Promise<BanditArm[]> {
   const res = await fetch(`${BASE}/bot/bandit_stats`);
+  return res.json();
+}
+
+export async function fetchTradeHistory(limit = 50): Promise<TradeHistoryItem[]> {
+  const res = await fetch(`${BASE}/bot/trade_history?limit=${limit}`);
   return res.json();
 }
 
