@@ -1,9 +1,7 @@
 import numpy as np
-import pandas as pd
 import logging
 from backend.db import SessionLocal
-from backend.models import Decision, DailyEquity
-from sqlalchemy import func
+from backend.models import Decision
 
 logger = logging.getLogger("MonteCarlo")
 

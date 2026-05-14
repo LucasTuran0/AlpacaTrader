@@ -1,6 +1,6 @@
 import random
 from sqlalchemy.orm import Session
-from .models import BanditState, Decision
+from .models import BanditState
 
 class EpsilonGreedyBandit:
     def __init__(self, db: Session, epsilon: float = 0.2):

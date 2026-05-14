@@ -1,13 +1,9 @@
 import logging
-import uuid
 import pandas as pd
-import numpy as np
-import os
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-from backend.db import SessionLocal, engine, Base
+from backend.db import SessionLocal
 from backend.models import Decision, DailyEquity, BanditState
 from backend.market_data import MarketDataProvider
 from backend.learning import EpsilonGreedyBandit
@@ -61,7 +57,7 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
             vix_raw = yf.download("^VIX", start=start_date, end=end_date, interval="1d", progress=False)
             vix_bars = vix_raw.rename(columns={'Close': 'close'})
         else:
-            logger.info(f"Fetching Daily data from Yahoo Finance...")
+            logger.info("Fetching Daily data from Yahoo Finance...")
             download_list = list(set(symbols + ["^VIX"]))
             raw_bars = yf.download(download_list, start=start_date, end=end_date, interval="1d", progress=False)
             
@@ -173,8 +169,6 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
                         price_low = price_initial * 0.97
                         price_final = price_initial * 0.975 # Partial recovery
                     
-                    change_pct = (price_final - price_initial) / price_initial
-                    
                     # Size weighted impact
                     # We check if Low hit SL or High hit TP during the next bar
                     # (Note: This is a daily approximation. For 1-min bars, it's very accurate)
@@ -230,7 +224,8 @@ def run_backtest(days_to_sim=200, start_date=None, end_date=None, reset_bandit=T
             eq_record = DailyEquity(
                 date=pd.to_datetime(current_date).to_pydatetime(),
                 equity=equity,
-                drawdown_pct=0.0
+                drawdown_pct=0.0,
+                source="backtest"
             )
             db.merge(eq_record)
             

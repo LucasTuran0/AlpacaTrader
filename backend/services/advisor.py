@@ -1,7 +1,7 @@
 import os
 import json
 from sqlalchemy.orm import Session
-from backend.models import Decision, BanditState
+from backend.models import Decision
 from backend.learning import EpsilonGreedyBandit
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate

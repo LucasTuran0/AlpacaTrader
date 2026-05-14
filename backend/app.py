@@ -1,5 +1,6 @@
+import json as _json
 import os
-import uuid
+import time
 import logging
 import logging.handlers
 import asyncio
@@ -12,9 +13,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy.orm import Session
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, TakeProfitRequest, StopLossRequest, GetOrdersRequest
@@ -29,7 +29,7 @@ from backend.services.execution import calculate_orders
 from backend.services.logging import LoggingService
 from backend.services.metrics import MetricsService
 from backend.db import Base, engine, SessionLocal
-from backend.models import Decision, Order, DailyEquity, BanditState
+from backend.models import Decision, Order
 from backend.learning import EpsilonGreedyBandit
 from backend.backtest import run_backtest
 from backend.services.streaming import AlpacaStreamingService
@@ -179,7 +179,6 @@ async def handle_trade_update(data):
 
 app = FastAPI(title="AlpacaTrader API", version="0.1.0", lifespan=lifespan)
 
-import json as _json
 _origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 _allow_origins = _json.loads(_origins_env) if _origins_env.startswith("[") else [o.strip() for o in _origins_env.split(",")]
 
@@ -193,8 +192,6 @@ app.add_middleware(
 
 # --- Scheduler & Liquidation ---
 scheduler = BackgroundScheduler(timezone="America/New_York")
-
-import time
 
 def liquidate_all_positions():
     """

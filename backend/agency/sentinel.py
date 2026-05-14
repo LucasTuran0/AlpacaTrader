@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 from typing import List
 from langchain_google_genai import ChatGoogleGenerativeAI

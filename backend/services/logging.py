@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from backend.models import Decision, Order
-import json
 from datetime import datetime
 
 class LoggingService:

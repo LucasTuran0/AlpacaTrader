@@ -1,15 +1,14 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from backend.models import DailyEquity, Decision
-from datetime import datetime
-import pandas as pd
 
 class MetricsService:
     def __init__(self, db: Session):
         self.db = db
 
     def record_daily_equity(self, equity: float):
-        high_water_mark = self.db.query(func.max(DailyEquity.equity)).scalar() or equity
+        live_q = self.db.query(DailyEquity).filter(DailyEquity.source == "live")
+        high_water_mark = live_q.with_entities(func.max(DailyEquity.equity)).scalar() or equity
         high_water_mark = max(high_water_mark, equity)
         drawdown_pct = 0.0
         if high_water_mark > 0:
@@ -17,7 +16,8 @@ class MetricsService:
 
         rec = DailyEquity(
             equity=equity,
-            drawdown_pct=drawdown_pct
+            drawdown_pct=drawdown_pct,
+            source="live"
         )
         self.db.add(rec)
         self.db.commit()
@@ -26,8 +26,13 @@ class MetricsService:
         # 1. Total runs
         total_runs = self.db.query(Decision).count()
         
-        # 2. Equity Curve
-        equity_recs = self.db.query(DailyEquity).order_by(DailyEquity.date.asc()).all()
+        # 2. Equity Curve — live Alpaca account data only, never backtest rows
+        equity_recs = (
+            self.db.query(DailyEquity)
+            .filter(DailyEquity.source == "live")
+            .order_by(DailyEquity.date.asc())
+            .all()
+        )
         if not equity_recs:
             return {"total_runs": total_runs, "current_equity": 0, "drawdown": 0}
             
