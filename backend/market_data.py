@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 import pandas as pd
 import yfinance as yf
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient, NewsClient
 from alpaca.data.requests import StockBarsRequest, NewsRequest
 from alpaca.data.timeframe import TimeFrame
@@ -19,6 +20,13 @@ class MarketDataProvider:
         
         self.client = StockHistoricalDataClient(self.api_key, self.api_secret)
         self.news_client = NewsClient(self.api_key, self.api_secret)
+        # Free paper accounts may only query IEX; SIP requires a paid subscription.
+        feed_name = os.getenv("ALPACA_DATA_FEED", "iex").lower()
+        try:
+            self.data_feed = DataFeed(feed_name)
+        except ValueError:
+            logger.warning(f"Unknown ALPACA_DATA_FEED='{feed_name}', falling back to IEX")
+            self.data_feed = DataFeed.IEX
         self._vix_cache = {"value": 20.0, "timestamp": 0.0}
         self._vix_cache_ttl = 300  # 5 minutes
 
@@ -33,7 +41,8 @@ class MarketDataProvider:
             symbol_or_symbols=symbols,
             timeframe=timeframe,
             start=start_dt,
-            end=end_dt
+            end=end_dt,
+            feed=self.data_feed,
         )
 
         bars = self.client.get_stock_bars(request_params)
@@ -89,7 +98,10 @@ class MarketDataProvider:
         Returns a dict {symbol: TradeObject}.
         """
         from alpaca.data.requests import StockLatestTradeRequest
-        
-        req = StockLatestTradeRequest(symbol_or_symbols=symbols)
+
+        req = StockLatestTradeRequest(
+            symbol_or_symbols=symbols,
+            feed=self.data_feed,
+        )
         trades = self.client.get_stock_latest_trade(req)
         return trades

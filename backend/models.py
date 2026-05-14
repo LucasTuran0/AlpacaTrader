@@ -47,3 +47,4 @@ class DailyEquity(Base):
     date = Column(DateTime, default=datetime.utcnow)
     equity = Column(Float)
     drawdown_pct = Column(Float)
+    source = Column(String, default="live", nullable=False)

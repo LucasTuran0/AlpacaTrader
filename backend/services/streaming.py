@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from alpaca.data import StockHistoricalDataClient
+from alpaca.data.enums import DataFeed
 from alpaca.data.requests import StockLatestTradeRequest
 from alpaca.trading.stream import TradingStream
 from backend.config import TRADED_SYMBOLS
@@ -15,6 +16,14 @@ class AlpacaStreamingService:
         self._api_key = os.getenv("ALPACA_API_KEY")
         self._secret_key = os.getenv("ALPACA_API_SECRET")
         self._paper = os.getenv("ALPACA_PAPER", "true").lower() == "true"
+
+        # Free paper accounts may only query IEX; SIP requires a paid subscription.
+        feed_name = os.getenv("ALPACA_DATA_FEED", "iex").lower()
+        try:
+            self._data_feed = DataFeed(feed_name)
+        except ValueError:
+            logger.warning(f"Unknown ALPACA_DATA_FEED='{feed_name}', falling back to IEX")
+            self._data_feed = DataFeed.IEX
 
         self.data_callback = data_callback
         self.trade_callback = trade_callback
@@ -39,7 +48,10 @@ class AlpacaStreamingService:
         backoff = 5
         while not self._stopping:
             try:
-                req = StockLatestTradeRequest(symbol_or_symbols=self.symbols)
+                req = StockLatestTradeRequest(
+                    symbol_or_symbols=self.symbols,
+                    feed=self._data_feed,
+                )
                 latest = self._data_client.get_stock_latest_trade(req)
 
                 now = asyncio.get_event_loop().time()
