@@ -4,7 +4,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'alpaca_trader_v3.db')}"
+DB_DIR = os.getenv("DB_DIR", BASE_DIR)
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(DB_DIR, 'alpaca_trader_v3.db')}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

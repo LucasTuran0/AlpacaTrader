@@ -9,7 +9,7 @@ COPY backend/ ./backend/
 COPY agent/ ./agent/
 COPY mcp_server/ ./mcp_server/
 
-RUN mkdir -p logs
+RUN mkdir -p logs /data
 
 EXPOSE 8000
 
