@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import os
-from alpaca.data.live import StockDataStream
+from alpaca.data import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestTradeRequest
 from alpaca.trading.stream import TradingStream
 from backend.config import TRADED_SYMBOLS
 from dotenv import load_dotenv
@@ -27,26 +28,63 @@ class AlpacaStreamingService:
         self.min_cooldown_sec = 10
         self.global_last_trigger = 0.0
 
-        self.data_stream = None
+        self._data_client = StockHistoricalDataClient(self._api_key, self._secret_key)
         self.trade_stream = None
 
-    def _new_data_stream(self):
-        stream = StockDataStream(self._api_key, self._secret_key)
-        stream.subscribe_trades(self._on_data, *self.symbols)
-        return stream
+    # ── REST-based market data polling ────────────────────────────────────────
+
+    async def _run_data_polling(self):
+        """Poll latest trades via REST instead of WebSocket to avoid connection limits."""
+        logger.info("Starting REST market-data polling loop...")
+        backoff = 5
+        while not self._stopping:
+            try:
+                req = StockLatestTradeRequest(symbol_or_symbols=self.symbols)
+                latest = self._data_client.get_stock_latest_trade(req)
+
+                now = asyncio.get_event_loop().time()
+                triggered = False
+
+                for symbol in self.symbols:
+                    if symbol not in latest:
+                        continue
+                    price = float(latest[symbol].price)
+                    prev = self.last_prices.get(symbol, 0.0)
+
+                    if prev == 0.0:
+                        self.last_prices[symbol] = price
+                        continue
+
+                    move_pct = abs(price - prev) / prev
+                    time_since_last = now - self.last_trigger_times.get(symbol, 0.0)
+
+                    if move_pct >= self.threshold or time_since_last >= self.heartbeat_sec:
+                        if not triggered and (now - self.global_last_trigger) >= self.min_cooldown_sec:
+                            logger.info(f"PREY DETECTED: {symbol} @ {price} (Δ {move_pct:.4%})")
+                            self.last_prices[symbol] = price
+                            self.last_trigger_times[symbol] = now
+                            self.global_last_trigger = now
+                            triggered = True
+                            await self.data_callback()
+                    else:
+                        self.last_prices[symbol] = price
+
+                backoff = 5
+                await asyncio.sleep(self.heartbeat_sec)
+
+            except Exception as e:
+                if self._stopping:
+                    return
+                logger.error(f"Market-data poll error: {e}. Retrying in {backoff}s...")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+
+    # ── WebSocket trading stream (order fills) ─────────────────────────────────
 
     def _new_trade_stream(self):
         stream = TradingStream(self._api_key, self._secret_key, paper=self._paper)
         stream.subscribe_trade_updates(self._on_trade_update)
         return stream
-
-    async def _close_data_stream(self):
-        if self.data_stream is not None:
-            try:
-                await self.data_stream.stop()
-            except Exception:
-                pass
-            self.data_stream = None
 
     async def _close_trade_stream(self):
         if self.trade_stream is not None:
@@ -56,48 +94,9 @@ class AlpacaStreamingService:
                 pass
             self.trade_stream = None
 
-    async def _on_data(self, data):
-        symbol = data.symbol
-        price = data.price
-
-        prev_price = self.last_prices.get(symbol, 0.0)
-        if prev_price == 0:
-            self.last_prices[symbol] = price
-            return
-
-        move_pct = abs(price - prev_price) / prev_price
-        now = asyncio.get_event_loop().time()
-        time_since_last = now - self.last_trigger_times.get(symbol, 0.0)
-
-        if move_pct >= self.threshold or time_since_last >= self.heartbeat_sec:
-            if (now - self.global_last_trigger) < self.min_cooldown_sec:
-                return
-
-            logger.info(f"PREY DETECTED: {symbol} at {price} (Move: {move_pct:.4%})")
-            self.last_prices[symbol] = price
-            self.last_trigger_times[symbol] = now
-            self.global_last_trigger = now
-            await self.data_callback()
-
     async def _on_trade_update(self, data):
         logger.info(f"TRADE UPDATE: {data.event} for {data.order.symbol}")
         await self.trade_callback(data)
-
-    async def _run_data_stream_with_reconnect(self):
-        backoff = 1
-        while not self._stopping:
-            try:
-                await self._close_data_stream()
-                self.data_stream = self._new_data_stream()
-                await asyncio.to_thread(self.data_stream.run)
-            except Exception as e:
-                if self._stopping:
-                    return
-                logger.error(f"Data stream disconnected: {e}. Reconnecting in {backoff}s...")
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 60)
-            else:
-                backoff = 1
 
     async def _run_trade_stream_with_reconnect(self):
         backoff = 1
@@ -115,13 +114,14 @@ class AlpacaStreamingService:
             else:
                 backoff = 1
 
+    # ── Lifecycle ──────────────────────────────────────────────────────────────
+
     async def start(self):
-        logger.info("Starting data and trade streams with auto-reconnect...")
-        asyncio.create_task(self._run_data_stream_with_reconnect())
+        logger.info("Starting market-data polling + trade stream...")
+        asyncio.create_task(self._run_data_polling())
         await self._run_trade_stream_with_reconnect()
 
     async def stop(self):
-        logger.info("Stopping Streams...")
+        logger.info("Stopping streaming service...")
         self._stopping = True
-        await self._close_data_stream()
         await self._close_trade_stream()
