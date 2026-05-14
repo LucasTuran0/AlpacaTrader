@@ -9,6 +9,18 @@ from backend.config import TRADED_SYMBOLS, AGENTIC_MODE
 
 logger = logging.getLogger("AgentGraph")
 
+# Lazily created on first use so tests can import graph.py without a GOOGLE_API_KEY.
+# The single instance is reused across bot cycles so the sentiment cache persists.
+_sentinel: "SentinelShield | None" = None
+
+
+def _get_sentinel() -> SentinelShield:
+    global _sentinel
+    if _sentinel is None:
+        _sentinel = SentinelShield()
+    return _sentinel
+
+
 # --- Optional MCP tools for agentic mode ---
 _mcp_tools_loaded = False
 _mcp_tools = []
@@ -39,13 +51,12 @@ async def _ensure_mcp_tools():
 
 async def sentinel_node(state: AgentState):
     """Checks VIX and Sentiment to determine if it's safe to trade."""
-    sentinel = SentinelShield()
-
+    sentinel = _get_sentinel()
     vix = state["market_context"].get("vix_close", 20.0)
     auto_regime = sentinel.analyze_vix_regime(vix)
     override_mode = state["market_context"].get("risk_override")
 
-    sentiment_score = await sentinel.analyze_sentiment(TRADED_SYMBOLS[:3])
+    sentiment_score = await sentinel.analyze_sentiment(TRADED_SYMBOLS[:3], vix=vix)
 
     status = auto_regime
     if override_mode is not None:

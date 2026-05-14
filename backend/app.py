@@ -99,10 +99,45 @@ market_provider = MarketDataProvider()
 risk_override: str | None = None  # None = use auto-detection, or "SAFE"/"SHIELD_ACTIVE"/"CRISIS"
 bandit_epsilon_override: float | None = None  # None = use default from EpsilonGreedyBandit
 
+def _patch_missing_columns():
+    """Idempotently add columns that exist in the SQLAlchemy models but are
+    missing from the live database. Production was originally bootstrapped via
+    ``Base.metadata.create_all`` (not Alembic), so newly added columns on
+    existing tables never reach the persistent SQLite without a one-off patch.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    with engine.begin() as conn:
+        for table_name, table in Base.metadata.tables.items():
+            if table_name not in existing_tables:
+                continue
+            db_cols = {c["name"] for c in inspector.get_columns(table_name)}
+            for column in table.columns:
+                if column.name in db_cols:
+                    continue
+                col_type = column.type.compile(dialect=engine.dialect)
+                default_clause = ""
+                if column.server_default is not None:
+                    default_clause = f" DEFAULT {column.server_default.arg}"
+                elif column.default is not None and getattr(column.default, "is_scalar", False):
+                    default_clause = f" DEFAULT '{column.default.arg}'"
+                nullable_clause = "" if column.nullable else " NOT NULL"
+                ddl = (
+                    f"ALTER TABLE {table_name} ADD COLUMN "
+                    f"{column.name} {col_type}{default_clause}{nullable_clause}"
+                )
+                logger.warning(f"Schema patch: {ddl}")
+                conn.execute(text(ddl))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(" Starting PaperPilot Backend...")
     Base.metadata.create_all(bind=engine)
+    _patch_missing_columns()
     
     # Initialize Streaming Service
     # We pass BOTH price trigger and trade update handlers
