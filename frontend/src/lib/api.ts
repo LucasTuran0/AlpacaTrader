@@ -1,4 +1,4 @@
-const BASE = "/api";
+const BASE = import.meta.env.VITE_BACKEND_URL ?? "/api";
 
 export interface AccountInfo {
   equity: number;

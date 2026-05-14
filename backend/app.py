@@ -179,9 +179,13 @@ async def handle_trade_update(data):
 
 app = FastAPI(title="AlpacaTrader API", version="0.1.0", lifespan=lifespan)
 
+import json as _json
+_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+_allow_origins = _json.loads(_origins_env) if _origins_env.startswith("[") else [o.strip() for o in _origins_env.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

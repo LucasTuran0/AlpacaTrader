@@ -4,7 +4,8 @@ import { useWebSocket } from "../hooks/useWebSocket";
 
 export default function LogStream() {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${proto}//${window.location.host}/ws/logs`;
+  const backendHost = import.meta.env.VITE_WS_URL ?? `${proto}//${window.location.host}`;
+  const wsUrl = `${backendHost}/ws/logs`;
   const { messages, connected } = useWebSocket(wsUrl);
   const bottomRef = useRef<HTMLDivElement>(null);
 
