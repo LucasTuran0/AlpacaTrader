@@ -27,6 +27,7 @@ jobs:
         env:
           ALPACA_API_KEY: "test"
           ALPACA_API_SECRET: "test"
+          PYTHONPATH: "."
 
   frontend-build:
     runs-on: ubuntu-latest
